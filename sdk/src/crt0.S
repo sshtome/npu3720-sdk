@@ -11,6 +11,13 @@ trap_table:
     .global _start
     .type _start, %function
 _start:
+    /* 0) Force known PSR state first: PIL=15 (mask IRQs), S=1, ET=0, CWP=0 */
+    set     0x0F80, %g1
+    wr      %g0, %g1, %psr
+    nop
+    nop
+    nop
+
     /* 1) Disable watchdog */
     set     0x260200A4, %g1
     st      %g0, [%g1]
@@ -21,7 +28,7 @@ _start:
     nop
     nop
 
-    /* 3) Stack */
+    /* 3) Stack (in CWP=0) */
     set     _stack_top, %sp
     mov     %sp, %fp
 
@@ -49,6 +56,13 @@ _start:
     nop
     nop
 
+    /* 7) Enable synchronous traps: PIL=15, S=1, ET=1, CWP=0 */
+    set     0x0FA0, %g1
+    wr      %g0, %g1, %psr
+    nop
+    nop
+    nop
+
     call    kmain
     nop
 
@@ -60,15 +74,18 @@ _start:
     .text
     .type window_overflow, %function
 window_overflow:
+    mov     %g1, %l5
     mov     %wim, %l3
     sll     %l3, 7, %l4
     srl     %l3, 1, %l3
-    /* Carry rotated WIM in %g1 across save (trap_entry_5 already clobbers %g1);
-     * writing new WIM before save would set WIM[new_cwp]=1 and cause error mode. */
     or      %l3, %l4, %g1
     and     %g1, 0xFF, %g1
+    wr      %g0, %g0, %wim
+    nop
+    nop
+    nop
     save
-    mov     %g1, %wim
+    wr      %g0, %g1, %wim
     nop
     nop
     nop
@@ -81,6 +98,7 @@ window_overflow:
     std     %i4, [%sp + 48]
     std     %i6, [%sp + 56]
     restore
+    mov     %l5, %g1
     jmp     %l1
     rett    %l2
 
@@ -88,12 +106,13 @@ window_overflow:
     .text
     .type window_underflow, %function
 window_underflow:
+    mov     %g1, %l5
     mov     %wim, %l3
     sll     %l3, 1, %l4
     srl     %l3, 7, %l3
-    or      %l3, %l4, %l3
-    and     %l3, 0xFF, %l3
-    mov     %l3, %wim
+    or      %l3, %l4, %g1
+    and     %g1, 0xFF, %g1
+    wr      %g0, %g0, %wim
     nop
     nop
     nop
@@ -109,6 +128,11 @@ window_underflow:
     ldd     [%sp + 56], %i6
     save
     save
+    wr      %g0, %g1, %wim
+    nop
+    nop
+    nop
+    mov     %l5, %g1
     jmp     %l1
     rett    %l2
 

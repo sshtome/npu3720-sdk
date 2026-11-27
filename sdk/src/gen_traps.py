@@ -9,37 +9,37 @@ for tt in range(256):
     entry = [f"trap_entry_{tt}:"]
     if tt == 0:
         entry += [
-            "    sethi   %hi(_start), %g1",
-            "    jmp     %g1 + %lo(_start)",
+            "    sethi   %hi(_start), %l0",
+            "    jmp     %l0 + %lo(_start)",
             "    nop",
             "    nop",
         ]
     elif tt == 5:
         entry += [
-            "    sethi   %hi(window_overflow), %g1",
-            "    jmp     %g1 + %lo(window_overflow)",
+            "    sethi   %hi(window_overflow), %l0",
+            "    jmp     %l0 + %lo(window_overflow)",
             "    nop",
             "    nop",
         ]
     elif tt == 6:
         entry += [
-            "    sethi   %hi(window_underflow), %g1",
-            "    jmp     %g1 + %lo(window_underflow)",
+            "    sethi   %hi(window_underflow), %l0",
+            "    jmp     %l0 + %lo(window_underflow)",
             "    nop",
             "    nop",
         ]
     elif tt == 9:
         entry += [
-            "    sethi   %hi(fault_skip), %g1",
-            "    jmp     %g1 + %lo(fault_skip)",
+            "    sethi   %hi(fault_skip), %l0",
+            "    jmp     %l0 + %lo(fault_skip)",
             "    nop",
             "    nop",
         ]
     else:
         entry += [
             f"    mov     {tt}, %g2",
-            "    sethi   %hi(crash_handler), %g1",
-            "    jmp     %g1 + %lo(crash_handler)",
+            "    sethi   %hi(crash_handler), %l0",
+            "    jmp     %l0 + %lo(crash_handler)",
             "    nop",
         ]
     lines.append("\n".join(entry))

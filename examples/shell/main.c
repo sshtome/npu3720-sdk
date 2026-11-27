@@ -134,8 +134,17 @@ static void on_console_line(const char *line)
         npu_log_puts("l1flush=1\n");
     } else if (starts_with(line, "l1flush")) {
         npu_log_puts("usage: l1flush <0|1>\n");
+    } else if (str_eq(line, "win12")) {
+        u32 w = vol_deep(12u, 1u, 2u, 3u, 4u);
+        if (w == 910u) {
+            npu_log_puts("win12=OK\n");
+        } else {
+            npu_log_puts("win12=FAIL(");
+            npu_log_dec(w);
+            npu_log_puts(")\n");
+        }
     } else if (str_eq(line, "help")) {
-        npu_log_puts("commands: ping | info | ticks | jsm | peek <hex> | l1flush <0|1> | help\n");
+        npu_log_puts("commands: ping | info | ticks | jsm | peek <hex> | l1flush <0|1> | win12 | help\n");
     } else {
         npu_log_puts("unknown cmd: ");
         npu_log_puts(line);
@@ -168,15 +177,7 @@ void kmain(void)
     npu_log_dec(up_ms);
     npu_log_puts(" ms\n");
 
-    w = vol_deep(12u, 1u, 2u, 3u, 4u);
-    if (w == 910u) {
-        npu_log_puts("win12=OK\n");
-    } else {
-        npu_log_puts("win12=FAIL(");
-        npu_log_dec(w);
-        npu_log_puts(")\n");
-    }
-
+    (void)i;
     npu_console_register(on_console_line);
     npu_log_puts("npu3720-sdk shell ready (type 'help')\n");
 
