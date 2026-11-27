@@ -1,0 +1,16 @@
+*.o
+*.bin
+*.map
+*.ko
+*.mod
+*.mod.c
+*.mod.o
+*.cmd
+.*.cmd
+modules.order
+Module.symvers
+build/
+__pycache__/
+*.pyc
+traps_table.S
+.tmp_versions/
