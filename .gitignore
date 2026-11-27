@@ -14,3 +14,4 @@ __pycache__/
 *.pyc
 traps_table.S
 .tmp_versions/
+.agent/
