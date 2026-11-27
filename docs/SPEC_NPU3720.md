@@ -21,6 +21,9 @@ Verification tags used in this document:
 | Signature check | None | `[VERIFIED-HW]` |
 
 ### Known LeonRT Quirks (`[VERIFIED-HW]`)
+- `PSR.ET` must be set to `1` in `crt0.S` before any deep calls or traps: with `ET=0`, `trap 0x05/0x06/0x09` trigger a hardware reset rather than invoking the trap table.
+- Async traps (`tt=0x11..0x1F`) enter with `ET=0` and arbitrary `CWP`: the trampoline must spill if `WIM` bit matches the trap window, raise `PIL=15` and enable `ET=1` before C dispatch, and restore `PSR` without clobbering the current `CWP`.
+- Critical-section helpers (`npu_irq_restore`) must RMW only `PIL` bits `[11:8]` in `%psr`; writing a saved `CWP` across register-window transitions corrupts the return window.
 - Writing `0xFFFFFFFF` to `%wim` is ignored; reading `%wim` 3 `nop`s after such a write hangs the core.
 - `clang --target=sparcel-unknown-elf` silently truncates `ta 0x80` to `ta 0` (7-bit trap immediate).
 - Userspace `mmap` of PCI BAR0 returns `0xFFFFFFFF`; host MMIO access requires `ioremap` in kernel space (e.g. `tools/npu_mmio`).
@@ -31,6 +34,7 @@ Verification tags used in this document:
 
 | Range | Purpose | Status |
 |---|---|---|
+| `0x40000000` | Unmapped AHB hole (`< 0x80000000`): safe read triggers local `trap 0x09` without host MMU fault | `[VERIFIED-HW]` |
 | `0x84800000` (4 KB) | `boot_params` | `[VERIFIED-HW]` |
 | `0x84801000` (4 KB) | Firmware version string | `[VERIFIED-HW]` |
 | `0x84802000..0x88800000` | Firmware BO (`runtime_size = 0x4000000` − 8 KB) | `[VERIFIED-HW]` |
@@ -38,7 +42,7 @@ Verification tags used in this document:
 | `0x90180000` (16 KB) | `mem_tx` (Host → Device IPC buffers) | `[VERIFIED-HW]` |
 | `0x90184000` (8 KB) | `mem_rx` IPC header area (`64B` slot stride) | `[VERIFIED-HW]` |
 | `0x90186000` (8 KB) | `mem_rx` IPC payload area (`128B` JSM slot stride) | `[VERIFIED-HW]` |
-| `0xA0000000` | `global_aliased_pio` — unused; triggers TBU translation fault | `[VERIFIED-HW]` |
+| `0xA0000000` | `global_aliased_pio` — triggers host TBU translation fault and `intel_vpu` MMU event recovery | `[VERIFIED-HW]` |
 | `0x20000000..0x3FFFFFFF` | Internal MMIO window: `CPU_addr = host_BAR0 + 0x20000000` | `[VERIFIED-HW]` |
 | `0x2E000000` | NNCMX SRAM (2 MB/tile, stride `0x200000`) | `[VERIFIED-CODE]` |
 | `0x2EF30000` | DPU / NCE register window | `[VERIFIED-CODE]` |
@@ -63,23 +67,35 @@ Verification tags used in this document:
 
 | CPU Addr | Host BAR0 | Register | Status |
 |---|---|---|---|
-| `0x26000230` | `0x06000230` | `IRQMP_PENDING` (core 0) | `[VERIFIED-CODE]` |
+| `0x26000000 + 4*irq` | `0x06000000+` | `ICB_CFG(irq)` (128 IRQs; e.g. `0x1E` edge / `0x1C` level) | `[VERIFIED-HW]` |
+| `0x26000200 + 4*bank` | `0x06000200+` | `ICB_STATUS[0..3]` (raw/pending bits across 4 × 32-bit banks) | `[VERIFIED-HW]` |
+| `0x26000220 + 4*bank` | `0x06000220+` | `ICB_CLEAR[0..3]` (W1C acknowledge + posted-write readback `[0x26000000]`) | `[VERIFIED-HW]` |
+| `0x26000230` | `0x06000230` | `ICB_ACK` (read winning IRQ index; `>= 128` = spurious) | `[VERIFIED-HW]` |
+| `0x26000240 + 4*bank` | `0x06000240+` | `ICB_ENABLE[0..3]` / `+0x350` `ICB_DISABLE[0..3]` (write mask bit) | `[VERIFIED-HW]` |
+| `0x26000250 + 4*bank` | `0x06000250+` | `ICB_FORCE[0..3]` (software force IRQ) | `[VERIFIED-CODE]` |
 | `0x26010040` | `0x06010040` | `CPR_LEON_RT_VEC` | `[DERIVED]` |
-| `0x2602009C` | `0x0602009C` | `TIM_WATCHDOG` (free-running timer counter) | `[VERIFIED-HW]` |
+| `0x2602009C` | `0x0602009C` | `TIM_WATCHDOG` (stalls when `TIM_WDOG_EN=0`) | `[VERIFIED-HW]` |
 | `0x260200A4` | `0x060200A4` | `TIM_WDOG_EN` (write `0` to disable watchdog) | `[VERIFIED-HW]` |
-| `0x260200F0` | `0x060200F0` | `H2D_FIFO_WRITE` (host pushes; lower 6 bits `[5:0]` masked by HW) | `[VERIFIED-HW]` |
+| `0x260200A8` | `0x060200A8` | `TIM_SAFE` (`0xF1D0DEAD` unlock key) | `[VERIFIED-CODE]` |
+| `0x26021000..08` | `0x06021000..08` | `TIM_PRESCALER` / `PRESCALER_RELOAD` / `GEN_CONFIG` | `[VERIFIED-CODE]` |
+| `0x26028000` | `0x06028000` | `TIM_PERF_FRC_EN` (write `1` to enable 64-bit free-running counter) | `[VERIFIED-HW]` |
+| `0x2602800C..14` | `0x0602800C..14` | Timer0 Tick: `CTRL` (`0x3`), `STAT` (RMW `\|= 1` ack), `RELOAD` (`IRQ 108`) | `[VERIFIED-HW]` |
+| `0x26029000..04` | `0x06029000..04` | `TIM_PERF_FREE_CNT_LO/HI` (38.4 MHz 64-bit counter, atomic read via `ldd`) | `[VERIFIED-HW]` |
+| `0x260200F0` | `0x060200F0` | `H2D_FIFO_WRITE` (host pushes; lower 6 bits `[5:0]` masked by HW; `IRQ 12`) | `[VERIFIED-HW]` |
 | `0x260200F4` | `0x060200F4` | `H2D_FIFO_ATM` (pop address) | `[VERIFIED-HW]` |
 | `0x260200FC` | `0x060200FC` | `H2D_FIFO_STAT` (`fill[23:16]`) | `[VERIFIED-HW]` |
 | `0x26020220` | `0x06020220` | `H2D_FIFO_ACK` (write `0x1000` after pop) | `[VERIFIED-HW]` |
 
-### 3.3 GRLIB L2C (`0x27000000`) `[VERIFIED-HW/CODE]`
+Note: LeonNN (`LNN`) has a matching ICB window at `0x2F000000` (`[VERIFIED-CODE]`). Known LeonRT IRQs: `12` = H2D IPC FIFO (`[VERIFIED-HW]`), `106` = Doorbell (`[VERIFIED-CODE]`), `108` = Timer0 Tick (`[VERIFIED-HW]`).
+
+### 3.3 GRLIB L2C (`0x27000000`) `[VERIFIED-HW]`
 
 | CPU Addr | Register | Notes |
 |---|---|---|
-| `0x27000000` | `L2C_CTRL` | Control register |
-| `0x27000004` | `L2C_STAT` | `bit24`: 64B line (`1`) vs 32B (`0`); `[21:16]`: MTRR count |
-| `0x27000008` | `L2C_FLUSH` | `(line_addr & ~(line-1)) \| op`: `1`=clean line, `3`=clean+inv, `5`=inv all, `7`=flush all |
-| `0x27000080 + 4*i` | `L2C_MTRR[i]` | `[31:18]` base, `[17:16]` access ctrl, `[15:2]` mask, `bit1` WP, `bit0` enable |
+| `0x27000000` | `L2C_CTRL` | Read/modify/write `\|= 0x80000001` (`0x00040000` → `0x80040001` observed) |
+| `0x27000004` | `L2C_STAT` | `0x030C2103` observed (`bit24`: 64B line vs 32B, `[21:16]`: MTRR count) |
+| `0x27000008` | `L2C_FLUSH` | `(line_addr & ~(line-1)) \| op`: `1`=inv line, `2`=clean/wb line, `3`=flush line, `5`=inv all, `7`=flush all |
+| `0x27000080 + 4*i` | `L2C_MTRR[i]` | `[31:18]` base, `[17:16]` AC, `[15:2]` mask, `bit1` WP, `bit0` EN (`0x9000FFE1` → `0x90000000..0x90200000` uncached) |
 
 Note: `0x2D000000` / `0x2D400010..14` belong to a separate subsystem block, not LeonRT's GRLIB L2C.
 
@@ -99,7 +115,7 @@ Note: `0x2D000000` / `0x2D400010..14` belong to a separate subsystem block, not 
 - **JSM (`sched_mode=1`):** `VPU_IPC_CHAN_ASYNC_CMD = 0` (`[VERIFIED-HW]`).
   - `SET_PRIORITY_BAND_SETUP` (`0x1113`) → respond with `SET_PRIORITY_BAND_SETUP_RSP` (`0x2214`), `result = 0`, echoed `request_id` and `payload`.
   - `QUERY_ENGINE_HB` (`0x1104`) → respond with `QUERY_ENGINE_HB_DONE` (`0x2204`).
-- **Coherency:** CPU writes to `0x90184000` / `0x90186000` / `0x90000000` must be followed by `npu_l1_dcache_flush()` and `npu_l2c_clean_range()` before pushing to `D2H_FIFO_WRITE` or updating `fw_log->write_index`.
+- **Coherency:** With `L2C_MTRR[0] = 0x9000FFE1` and `L2C_CTRL` bit 31 enabled (`[VERIFIED-HW]`), writes to `0x90000000..0x90200000` (`fw_log` + IPC buffers) bypass L2C caching without explicit `npu_l2c_clean_range()`, requiring only `npu_l1_dcache_flush()` (`ASI 0x11`) when L1D is write-back/cached. Without MTRR, both L1D and L2C must be cleaned before pushing to `D2H_FIFO_WRITE` or updating `fw_log->write_index`.
 
 ### 4.3 `fw_log` & Console
 - `npu_tracing_buffer_header` (`0x90000000`, 128 bytes): `vpu_canary_start @ 0x40 = 0xCAFECAFE`, `write_index @ 0x44`, `size @ 0x50`, `header_version @ 0x54 = 1`, `header_size @ 0x56 = 128`, `format @ 0x58 = 0`, `name[16] @ 0x60`.

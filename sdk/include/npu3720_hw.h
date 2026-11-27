@@ -66,7 +66,21 @@ typedef int32_t  s32;
  * 3. MMIO: CPU_SS (0x26000000 = host BAR0 + 0x06000000)
  * ========================================================================== */
 
-#define NPU_IRQMP_PENDING         (0x06000230u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_ICB_BASE              (0x06000000u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_ICB_CFG(irq)          (NPU_ICB_BASE + 4u * (irq))
+#define NPU_ICB_STATUS(bank)      (NPU_ICB_BASE + 0x200u + 4u * (bank))
+#define NPU_ICB_CLEAR(bank)       (NPU_ICB_BASE + 0x220u + 4u * (bank))
+#define NPU_ICB_ACK               (NPU_ICB_BASE + 0x230u)       /* [VERIFIED-CODE] */
+#define NPU_ICB_ENABLE(bank)      (NPU_ICB_BASE + 0x240u + 4u * (bank))
+#define NPU_ICB_FORCE(bank)       (NPU_ICB_BASE + 0x250u + 4u * (bank))
+#define NPU_ICB_DISABLE(bank)     (NPU_ICB_BASE + 0x350u + 4u * (bank))
+#define NPU_ICB_NUM_IRQS          128u
+#define NPU_IRQMP_PENDING         NPU_ICB_ACK                   /* compat alias */
+#define NPU_IRQ_H2D_FIFO          12u                           /* [VERIFIED-CODE] */
+#define NPU_IRQ_DOORBELL          106u                          /* [VERIFIED-CODE] */
+#define NPU_IRQ_TIMER0            108u                          /* [VERIFIED-CODE] */
+#define NPU_LNN_ICB_BASE          (0x0F000000u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] 0x2F000000 */
+
 #define NPU_CPR_LEON_RT_VEC       (0x06010040u + NPU_WIN_SHIFT) /* [DERIVED] */
 #define NPU_H2D_FIFO_WRITE        (0x060200F0u + NPU_WIN_SHIFT) /* [VERIFIED-HW] */
 #define NPU_H2D_FIFO_ATM          (0x060200F4u + NPU_WIN_SHIFT) /* [VERIFIED-HW] */
@@ -82,6 +96,7 @@ typedef int32_t  s32;
 #define NPU_TIM_GEN_CONFIG        (0x06021008u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
 #define NPU_TIM_PERF_FRC_EN       (0x06028000u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
 #define NPU_TIM_TICK_CTRL         (0x0602800Cu + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TIM_TICK_CTRL_EN      0x3u                          /* enable + periodic IRQ */
 #define NPU_TIM_TICK_STAT         (0x06028010u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
 #define NPU_TIM_TICK_RELOAD       (0x06028014u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
 #define NPU_TIM_PERF_FREE_CNT_LO  (0x06029000u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */

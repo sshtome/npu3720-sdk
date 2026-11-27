@@ -78,20 +78,24 @@ static void jsm_respond(const volatile struct npu_jsm_msg *req, u32 resp_type)
 
 void npu_jsm_poll(void)
 {
+    u32 psr = npu_irq_save();
     u32 stat = mmio_read32(NPU_H2D_FIFO_STAT);
     u32 fill = (stat >> 16) & 0xFFu;
     u32 addr;
     volatile struct npu_ipc_hdr *hdr;
     volatile struct npu_jsm_msg *req;
 
-    if (fill == 0)
+    if (fill == 0) {
+        npu_irq_restore(psr);
         return;
+    }
 
     addr = mmio_read32(NPU_H2D_FIFO_ATM);
 
     if ((addr & 0xFF000000u) == NPU_CONSOLE_TAG) {
         npu_console_rx_word(addr);
         mmio_write32(NPU_H2D_FIFO_ACK, NPU_H2D_POP_ACK_VAL);
+        npu_irq_restore(psr);
         return;
     }
 
@@ -122,6 +126,21 @@ void npu_jsm_poll(void)
     }
 
     mmio_write32(NPU_H2D_FIFO_ACK, NPU_H2D_POP_ACK_VAL);
+    npu_irq_restore(psr);
+}
+
+static void on_h2d_fifo_irq(u32 irq, void *ctx)
+{
+    (void)irq;
+    (void)ctx;
+    while (((mmio_read32(NPU_H2D_FIFO_STAT) >> 16) & 0xFFu) != 0u)
+        npu_jsm_poll();
+}
+
+void npu_ipc_enable_irq(void)
+{
+    npu_irq_register(NPU_IRQ_H2D_FIFO, on_h2d_fifo_irq, NULL);
+    npu_irq_enable(NPU_IRQ_H2D_FIFO, 7u, 1);
 }
 
 u32 npu_jsm_count(void)

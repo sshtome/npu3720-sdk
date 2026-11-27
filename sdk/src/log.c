@@ -38,6 +38,7 @@ void npu_log_init(const char *name)
 
 void npu_log_flush(void)
 {
+    u32 psr = npu_irq_save();
     int mtrr = npu_l2c_is_mtrr_active();
 
     if (npu_l1_is_flush_enabled())
@@ -49,10 +50,12 @@ void npu_log_flush(void)
             npu_l2c_clean_range(NPU_LOG_CRIT_BUF + log_flushed_pos, log_pos - log_flushed_pos);
         log_flushed_pos = log_pos;
     }
+    npu_irq_restore(psr);
 }
 
 void npu_log_putc(char c)
 {
+    u32 psr = npu_irq_save();
     if (log_pos >= LOG_BUF_SIZE) {
         log_pos = 128u;
         log_flushed_pos = 128u;
@@ -61,15 +64,27 @@ void npu_log_putc(char c)
     *(volatile u8 *)(NPU_LOG_CRIT_BUF + log_pos) = (u8)c;
     log_pos++;
     log_hdr->write_index = log_pos;
+    npu_irq_restore(psr);
 }
 
 void npu_log_puts(const char *s)
 {
+    u32 psr;
     if (!s)
         return;
-    while (*s)
-        npu_log_putc(*s++);
+    psr = npu_irq_save();
+    while (*s) {
+        if (log_pos >= LOG_BUF_SIZE) {
+            log_pos = 128u;
+            log_flushed_pos = 128u;
+            log_hdr->wrap_count++;
+        }
+        *(volatile u8 *)(NPU_LOG_CRIT_BUF + log_pos) = (u8)*s++;
+        log_pos++;
+    }
+    log_hdr->write_index = log_pos;
     npu_log_flush();
+    npu_irq_restore(psr);
 }
 
 void npu_log_hex(u32 v)
@@ -90,6 +105,7 @@ void npu_log_dec(u32 v)
 {
     char buf[12];
     int i = 0;
+    u32 psr;
 
     if (v == 0) {
         npu_log_puts("0");
@@ -99,7 +115,9 @@ void npu_log_dec(u32 v)
         buf[i++] = (char)('0' + (v % 10u));
         v /= 10u;
     }
+    psr = npu_irq_save();
     while (i > 0)
         npu_log_putc(buf[--i]);
     npu_log_flush();
+    npu_irq_restore(psr);
 }

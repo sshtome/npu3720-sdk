@@ -35,6 +35,13 @@ for tt in range(256):
             "    nop",
             "    nop",
         ]
+    elif 0x11 <= tt <= 0x1F:
+        entry += [
+            f"    mov     {tt}, %l3",
+            "    sethi   %hi(irq_trampoline), %l0",
+            "    jmp     %l0 + %lo(irq_trampoline)",
+            "    nop",
+        ]
     else:
         entry += [
             f"    mov     {tt}, %g2",

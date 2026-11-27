@@ -2,7 +2,7 @@ CC      := clang
 TARGET  := --target=sparcel-unknown-elf
 CFLAGS  := $(TARGET) -ffreestanding -nostdlib -O2 -Wall -Wextra -I$(CURDIR)/sdk/include -mcpu=v8
 
-EXAMPLES := examples/hello examples/shell
+EXAMPLES := examples/hello examples/shell examples/selftest
 
 all: check-headers $(EXAMPLES)
 

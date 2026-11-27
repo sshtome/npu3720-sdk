@@ -146,6 +146,127 @@ fault_skip:
     jmp     %l2
     rett    %l2 + 4
 
+/* ---- hardware interrupt trampoline (traps 0x11..0x1F, IRL 1..15) ---- */
+    .text
+    .type irq_trampoline, %function
+irq_trampoline:
+    sub     %fp, 144, %sp
+    rd      %psr, %l0
+    rd      %y, %l4
+    st      %l0, [%sp + 96]
+    st      %l4, [%sp + 100]
+    st      %g1, [%sp + 104]
+    st      %g2, [%sp + 108]
+    st      %g3, [%sp + 112]
+    st      %g4, [%sp + 116]
+    st      %g5, [%sp + 120]
+    st      %g6, [%sp + 124]
+    st      %g7, [%sp + 128]
+
+    /* If trap window itself is invalid in %wim, spill (CWP_trap - 1) mod 8 */
+    and     %l0, 0x1F, %l4
+    mov     1, %l5
+    sll     %l5, %l4, %l5
+    rd      %wim, %l6
+    andcc   %l5, %l6, %g0
+    be      1f
+    nop
+
+    sll     %l6, 7, %l4
+    srl     %l6, 1, %l6
+    or      %l6, %l4, %l6
+    and     %l6, 0xFF, %l6
+    wr      %g0, %g0, %wim
+    nop
+    nop
+    nop
+    save
+    std     %l0, [%sp + 0]
+    std     %l2, [%sp + 8]
+    std     %l4, [%sp + 16]
+    std     %l6, [%sp + 24]
+    std     %i0, [%sp + 32]
+    std     %i2, [%sp + 40]
+    std     %i4, [%sp + 48]
+    std     %i6, [%sp + 56]
+    restore
+    wr      %g0, %l6, %wim
+    nop
+    nop
+    nop
+
+1:
+    /* Mask nested external IRQs (PIL=15) and enable traps (ET=1) for C handler */
+    or      %l0, 0xF20, %l4
+    wr      %g0, %l4, %psr
+    nop
+    nop
+    nop
+
+    call    npu_irq_dispatch
+    mov     %l3, %o0
+
+    /* Disable traps (ET=0, PIL=15) safely while adjusting window/regs */
+    ld      [%sp + 96], %l0
+    or      %l0, 0xF00, %l4
+    wr      %g0, %l4, %psr
+    nop
+    nop
+    nop
+
+    ld      [%sp + 100], %l4
+    wr      %g0, %l4, %y
+    ld      [%sp + 104], %g1
+    ld      [%sp + 108], %g2
+    ld      [%sp + 112], %g3
+    ld      [%sp + 116], %g4
+    ld      [%sp + 120], %g5
+    ld      [%sp + 124], %g6
+    ld      [%sp + 128], %g7
+
+    /* Ensure return window (CWP_trap + 1) mod 8 is valid before rett */
+    and     %l0, 0x1F, %l4
+    add     %l4, 1, %l4
+    and     %l4, 7, %l4
+    mov     1, %l5
+    sll     %l5, %l4, %l5
+    rd      %wim, %l6
+    andcc   %l5, %l6, %g0
+    be      2f
+    nop
+
+    sll     %l6, 1, %l4
+    srl     %l6, 7, %l6
+    or      %l6, %l4, %l6
+    and     %l6, 0xFF, %l6
+    wr      %g0, %g0, %wim
+    nop
+    nop
+    nop
+    restore
+    ldd     [%sp + 0], %l0
+    ldd     [%sp + 8], %l2
+    ldd     [%sp + 16], %l4
+    ldd     [%sp + 24], %l6
+    ldd     [%sp + 32], %i0
+    ldd     [%sp + 40], %i2
+    ldd     [%sp + 48], %i4
+    ldd     [%sp + 56], %i6
+    save
+    wr      %g0, %l6, %wim
+    nop
+    nop
+    nop
+
+2:
+    /* Restore exact pre-trap PSR (PIL, icc, PS, CWP_trap, ET=0) AFTER andcc */
+    wr      %g0, %l0, %psr
+    nop
+    nop
+    nop
+    jmp     %l1
+    rett    %l2
+
 /* ---- crash_handler: dump trap state to fw_log @ 0x90000150 and halt ---- */
     .text
     .type crash_handler, %function

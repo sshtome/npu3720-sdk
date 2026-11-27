@@ -26,23 +26,27 @@ void npu_timer_init(void)
 
 u32 npu_ticks(void)
 {
-    return mmio_read32(NPU_TIM_PERF_FREE_CNT_LO);
+    u32 lo = 0;
+    npu_ticks64(&lo, NULL);
+    return lo;
 }
 
 void npu_ticks64(u32 *lo, u32 *hi)
 {
-    u32 h1, l, h2;
+    register u32 r_lo __asm__("o2");
+    register u32 r_hi __asm__("o3");
 
-    do {
-        h1 = mmio_read32(NPU_TIM_PERF_FREE_CNT_HI);
-        l  = mmio_read32(NPU_TIM_PERF_FREE_CNT_LO);
-        h2 = mmio_read32(NPU_TIM_PERF_FREE_CNT_HI);
-    } while (h1 != h2);
+    __asm__ volatile(
+        "ldd [%2], %%o2"
+        : "=r"(r_lo), "=r"(r_hi)
+        : "r"(NPU_TIM_PERF_FREE_CNT_LO)
+        : "memory"
+    );
 
     if (lo)
-        *lo = l;
+        *lo = r_lo;
     if (hi)
-        *hi = h2;
+        *hi = r_hi;
 }
 
 u32 npu_timer_freq_hz(void)
@@ -94,4 +98,28 @@ u32 npu_uptime_ms(void)
     }
 
     return timer_uptime_ms;
+}
+
+void npu_timer_tick_start(u32 period_us)
+{
+    u32 khz = timer_freq_hz / 1000u;
+    u32 reload;
+
+    if (period_us == 0u)
+        period_us = 1000u;
+    /* 38400 kHz * 1000 us / 1000 -> 38400 ticks; avoid 32-bit overflow up to ~110 ms */
+    reload = (khz * period_us) / 1000u;
+    if (reload > 0u)
+        reload -= 1u;
+
+    mmio_write32(NPU_TIM_TICK_CTRL, 0u);
+    mmio_write32(NPU_TIM_TICK_STAT, 1u);
+    mmio_write32(NPU_TIM_TICK_RELOAD, reload);
+    mmio_write32(NPU_TIM_TICK_CTRL, NPU_TIM_TICK_CTRL_EN);
+}
+
+void npu_timer_tick_ack(void)
+{
+    u32 st = mmio_read32(NPU_TIM_TICK_STAT);
+    mmio_write32(NPU_TIM_TICK_STAT, st | 1u);
 }

@@ -155,7 +155,7 @@ static void on_console_line(const char *line)
 void kmain(void)
 {
     u32 lo0 = 0, hi0 = 0, lo1 = 0, hi1 = 0, up_ms;
-    u32 i, w;
+    u32 i;
 
     npu_init("NPU3720-SHELL");
 

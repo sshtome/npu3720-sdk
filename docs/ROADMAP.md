@@ -14,10 +14,10 @@ Baseline checkpoint: **`v0.1.0`** (`a7fe0f0`) — clean-room firmware builder, `
 | IPC D2H / H2D & JSM boot | `0x200200F0`, `0x260200F4/FC/220`, `ASYNC_CMD=0` | `[VERIFIED-HW]` | `v0.1.0` |
 | `fw_log` & Host↔NPU console | `0x90000000`, `0xCCxxxxxx` (`[21:6]`) | `[VERIFIED-HW]` | `v0.1.0` |
 | L1D & GRLIB L2C cache clean | `ASI 0x11`, `0x27000004/08` | `[VERIFIED-HW]` | `v0.1.0` |
-| Free-running timer & uptime | `GPTIMER` / `TIM` (`0x2602009C` stalls when WDOG off) | Open | **M1 (`v0.2.0`)** |
-| GRLIB L2C MTRR uncached window | `0x27000080+` (`0x90000000..0x90200000`) | Partially decoded `[VERIFIED-CODE]` | **M1 (`v0.2.0`)** |
-| Interrupt controller (`IRQMP`) | `0x26000230` / `0x20010230`, `tt=0x11..0x1F` | Address `[VERIFIED-CODE]` | **M1 (`v0.2.0`)** |
-| Automated hardware selftest | `examples/selftest` + `tools/run_test.sh` | Planned | **M1 (`v0.2.0`)** |
+| Free-running timer & uptime | `TIM_PERF_FREE_CNT` (`0x26029000/04`, 38.4 MHz `ldd`), Timer0 (`0x2602800C..14`) | `[VERIFIED-HW]` | **M1 (`v0.2.0`)** |
+| GRLIB L2C MTRR uncached window | `MTRR[0] = 0x9000FFE1` (`0x90000000..0x90200000`), `L2C_CTRL = 0x80040001` | `[VERIFIED-HW]` | **M1 (`v0.2.0`)** |
+| Interrupt controller (`ICB` / LeonRT) | 128-IRQ `ICB @ 0x26000000` (`LNN @ 0x2F000000`), `tt=0x11..0x1F`, `IRQ 12/108` | `[VERIFIED-HW]` | **M1 (`v0.2.0`)** |
+| Automated hardware selftest | `examples/selftest` (`5/5 PASS`) + `tools/run_test.sh selftest` | `[VERIFIED-HW]` | **M1 (`v0.2.0`)** |
 | Power & clocks (`CPR` / PUnit) | `0x26010040`, tile wake/clock gates | Partial `[DERIVED]` | **M2 (`v0.3.0`)** |
 | `NNCMX SRAM` | `0x2E000000` (2 × 2 MB tiles) | Base `[VERIFIED-CODE]` | **M2 (`v0.3.0`)** |
 | LeonRT `SRMMU` & TBU mapping | `ASI 0x18`/`0x19` / TBU interaction | Open | **M2 (`v0.3.0`)** |
@@ -31,13 +31,13 @@ Baseline checkpoint: **`v0.1.0`** (`a7fe0f0`) — clean-room firmware builder, `
 
 ## 2. Milestones & Acceptance Checkpoints
 
-### M1 (`v0.2.0`) — LeonRT System Peripherals & Test Harness
-**Goal:** Replace polling and manual cache flushes with hardware timers, `IRQMP` interrupts, `MTRR` uncached regions, and an automated on-target `selftest`.
-- **M1.1 Timer:** Identify and initialize a free-running hardware timer (`GPTIMER` or `TIM` configuration) independent of disabled watchdog; calibrate `npu_ticks()` and `npu_uptime_ms()` against host wall clock.
-- **M1.2 GRLIB L2C MTRR:** Decode `access_ctrl` modes and `CTRL` bits on `0x27000000`; map `0x90000000..0x90200000` as uncached or write-through without breaking code/boot; verify host visibility without explicit per-packet `clean_range`.
-- **M1.3 IRQMP & Interrupt Dispatch:** Implement `IRQMP` (`0x26000230`) driver and `tt=0x11..0x1F` trap dispatcher in `crt0.S`; route H2D FIFO and timer IRQs.
-- **M1.4 Hardware Selftest:** Add `examples/selftest` (register windows depth test, `fault_skip`, monotonic `uptime_ms`, non-zero IRQ counters, MTRR coherency test) and automated pass/fail verification in `tools/run_test.sh`.
-- **Checkpoint `v0.2.0`:** `sched_mode=1` boots cleanly; `uptime_ms` advances monotonically; H2D and timer IRQs fire; MTRR coherency verified; `selftest` outputs `PASS`; stock `.zst` firmware restored.
+### M1 (`v0.2.0`) — LeonRT System Peripherals & Test Harness ✅ `[VERIFIED-HW]`
+**Goal:** Replace polling and manual cache flushes with hardware timers, `ICB` interrupts, `MTRR` uncached regions, and an automated on-target `selftest`.
+- **M1.1–M1.4 Timer (`[VERIFIED-HW]`):** Enabled `TIM_PERF_FRC_EN` (`0x26028000`) and atomic 64-bit `ldd` reads of `TIM_PERF_FREE_CNT` (`0x26029000/04`, 38.4 MHz); calibrated `npu_ticks()` / `npu_uptime_ms()` against host clock without 64-bit software division.
+- **M1.5 GRLIB L2C MTRR (`[VERIFIED-HW]`):** Verified `L2C_FLUSH` opcodes (`1/2/3/5/7`), enabled `MTRR[0] = 0x9000FFE1` (`0x90000000..0x90200000` uncached) + `L2C_CTRL = 0x80040001`, confirmed coherent `fw_log` and `sched_mode=1` without `l2c_clean_range()`.
+- **M1.6 ICB & Interrupt Dispatch (`[VERIFIED-HW]`):** Implemented 128-IRQ `ICB` (`0x26000000`) driver and window-safe `tt=0x11..0x1F` trampoline (`crt0.S`) with `CWP`-preserving `PIL` RMW (`npu_irq_restore`); routed Timer0 Tick (`IRQ 108`, `0x2602800C..14`) and H2D FIFO (`IRQ 12`).
+- **M1.7 Hardware Selftest (`[VERIFIED-HW]`):** Added `examples/selftest` (`L2C/MTRR`, register windows `26/26`, `fault_skip @ 0x40000000`, monotonic `timer`, `IRQ 12/108`) and `tools/run_test.sh selftest` (`PASS 5/5`).
+- **Checkpoint `v0.2.0` (`Gate A + Gate B PASSED`):** `sched_mode=1` boots cleanly; `uptime_ms` advances monotonically; `IRQ 12` and `IRQ 108` fire without storm or reset; `MTRR` coherency verified; `SELFTEST: PASS (5/5)`; stock `.zst` firmware restored.
 
 ### M2 (`v0.3.0`) — Fast Local Memory, Power/Clocks & MMU
 **Goal:** Enable compute tile SRAM, document power/clock gating, and establish the MMU model.

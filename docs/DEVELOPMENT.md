@@ -14,8 +14,9 @@
 # Build SDK header checks and all examples
 make
 
-# Build npu_mmio debugfs helper
+# Build and load npu_mmio debugfs helper (optional, for BAR0 inspection)
 make -C tools/npu_mmio
+sudo insmod tools/npu_mmio/npu_mmio.ko
 ```
 
 ## Safe Testing & Rollback
@@ -23,6 +24,9 @@ make -C tools/npu_mmio
 Always verify that your distribution's stock firmware exists at `/lib/firmware/intel/vpu/vpu_37xx_v1.bin.zst` before running tests.
 
 ```bash
+# Run automated Gate B selftest (sched_mode=1, ping/pong, auto-restore stock FW)
+sudo ./tools/run_test.sh selftest
+
 # Test in OS scheduler mode (sched_mode=0)
 sudo ./tools/run_test.sh sched0 examples/hello/vpu_37xx_hello.bin
 

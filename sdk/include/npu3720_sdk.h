@@ -35,18 +35,35 @@ void npu_log_flush(void);
 
 /* IPC & JSM */
 void npu_ipc_init(void);
+void npu_ipc_enable_irq(void);
 void npu_ipc_send(u32 data_addr, u32 data_size, u16 channel);
 void npu_ipc_send_boot(void);
 void npu_jsm_poll(void);
 u32  npu_jsm_count(void);
 u32  npu_jsm_last_type(void);
 
-/* Timer (TIM_PERF_FREE_CNT @ 0x26029000) */
+/* Timer (TIM_PERF_FREE_CNT @ 0x26029000, Timer0 Tick @ 0x2602800C) */
 void npu_timer_init(void);
 u32  npu_ticks(void);
 void npu_ticks64(u32 *lo, u32 *hi);
 u32  npu_timer_freq_hz(void);
 u32  npu_uptime_ms(void);
+void npu_timer_tick_start(u32 period_us);
+void npu_timer_tick_ack(void);
+
+/* Interrupt Controller (128-IRQ ICB @ 0x26000000) */
+typedef void (*npu_irq_handler_t)(u32 irq, void *ctx);
+void npu_irq_init(void);
+void npu_irq_register(u32 irq, npu_irq_handler_t handler, void *ctx);
+void npu_irq_enable(u32 irq, u32 prio, int edge);
+void npu_irq_disable(u32 irq);
+void npu_irq_clear(u32 irq);
+u32  npu_irq_count(u32 irq);
+u32  npu_irq_spurious_count(void);
+void npu_irq_global_enable(void);
+void npu_irq_global_disable(void);
+u32  npu_irq_save(void);
+void npu_irq_restore(u32 psr);
 
 /* Safe memory read (protected by trap 0x09 fault_skip) */
 int  npu_safe_read32(u32 addr, u32 *out);
