@@ -21,7 +21,7 @@ Baseline checkpoint: **`v0.1.0`** (`a7fe0f0`) — clean-room firmware builder, `
 | Power & clocks (`CPR` / PUnit) | `0x26010040`, tile wake/clock gates | Partial `[DERIVED]` | **M2 (`v0.3.0`)** |
 | `NNCMX SRAM` | `0x2E000000` (2 × 2 MB tiles) | Base `[VERIFIED-CODE]` | **M2 (`v0.3.0`)** |
 | LeonRT `SRMMU` & TBU mapping | `ASI 0x18`/`0x19` / TBU interaction | Open | **M2 (`v0.3.0`)** |
-| Dual-core Leon (Core 1 / LNN) | `%asr17[31:28]=1`, `0x20010230`, mailbox | Open | **M3 (`v0.4.0`)** |
+| Dual-core Leon (Core 1 / LNN) | `%asr17[31:28]=1`, `LNN ICB 0x2F000000`, mailbox | Open | **M3 (`v0.4.0`)** |
 | `NNDMA` engine | DDR ↔ CMX descriptors, IRQ, throughput | Open | **M3 (`v0.4.0`)** |
 | `4× SHAVE DSP` | `0x2F800000+` (`+0x1000/+0x6000/+0x7000`) | Window `[VERIFIED-CODE]` | **M4 (`v0.5.0`)** |
 | `2× NCE / DPU` compute | `0x2EF30000+`, variant/invariant descriptors | Window `[VERIFIED-CODE]` | **M4 (`v0.5.0`)** |
@@ -48,7 +48,7 @@ Baseline checkpoint: **`v0.1.0`** (`a7fe0f0`) — clean-room firmware builder, `
 
 ### M3 (`v0.4.0`) — Second Leon Core (Core 1) & NNDMA
 **Goal:** Unlock symmetric/asymmetric dual-core Leon execution and hardware DMA transfers.
-- **M3.1 Core 1 Boot & SMP Sync:** Decode `CPR_LEON_RT_VEC` / reset vector for Core 1 (`%asr17[31:28]=1`), configure Core 1 `IRQMP` (`0x20010230`), implement mailbox + spinlock primitives, and run a dual-core execution test.
+- **M3.1 Core 1 Boot & SMP Sync:** Decode `CPR_LEON_RT_VEC` / reset vector for Core 1 (`%asr17[31:28]=1`), configure Core 1 `LNN ICB` (`0x2F000000`), implement mailbox + spinlock primitives, and run a dual-core execution test.
 - **M3.2 NNDMA Driver:** Reverse-engineer descriptor format, submission queues, completion status/IRQ, and implement asynchronous `npu_dma_copy()` (DDR ↔ CMX) with CRC/integrity and throughput checks.
 - **Checkpoint `v0.4.0`:** Core 0 and Core 1 exchange messages concurrently; `NNDMA` transfers DDR ↔ CMX without data corruption; tagged `v0.4.0`.
 

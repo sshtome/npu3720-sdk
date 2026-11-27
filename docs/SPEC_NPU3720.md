@@ -37,7 +37,7 @@ Verification tags used in this document:
 | `0x40000000` | Unmapped AHB hole (`< 0x80000000`): safe read triggers local `trap 0x09` without host MMU fault | `[VERIFIED-HW]` |
 | `0x84800000` (4 KB) | `boot_params` | `[VERIFIED-HW]` |
 | `0x84801000` (4 KB) | Firmware version string | `[VERIFIED-HW]` |
-| `0x84802000..0x88800000` | Firmware BO (`runtime_size = 0x4000000` − 8 KB) | `[VERIFIED-HW]` |
+| `0x84802000..0x88800000` | Firmware runtime BO (`runtime_size = 0x04000000`, 64 MB; `ivpu_fw_parse` subtracts 8 KB for `0x84800000..0x84801FFF`) | `[VERIFIED-HW]` |
 | `0x90000000..0xA0000000` | Shared DDR region (256 MB): `log_crit` `0x90000000` (512 KB), `log_verb` `0x90080000` (1 MB) | `[VERIFIED-HW]` |
 | `0x90180000` (16 KB) | `mem_tx` (Host → Device IPC buffers) | `[VERIFIED-HW]` |
 | `0x90184000` (8 KB) | `mem_rx` IPC header area (`64B` slot stride) | `[VERIFIED-HW]` |
