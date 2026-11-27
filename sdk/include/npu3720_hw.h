@@ -75,6 +75,18 @@ typedef int32_t  s32;
 #define NPU_H2D_POP_ACK_VAL       0x1000u                       /* [VERIFIED-HW] */
 #define NPU_TIM_WATCHDOG          (0x0602009Cu + NPU_WIN_SHIFT) /* [VERIFIED-HW] */
 #define NPU_TIM_WDOG_EN           (0x060200A4u + NPU_WIN_SHIFT) /* [VERIFIED-HW] */
+#define NPU_TIM_SAFE              (0x060200A8u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TIM_SAFE_UNLOCK_KEY   0xF1D0DEADu                   /* [VERIFIED-CODE] */
+#define NPU_TIM_PRESCALER         (0x06021000u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TIM_PRESCALER_RELOAD  (0x06021004u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TIM_GEN_CONFIG        (0x06021008u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TIM_PERF_FRC_EN       (0x06028000u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TIM_TICK_CTRL         (0x0602800Cu + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TIM_TICK_STAT         (0x06028010u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TIM_TICK_RELOAD       (0x06028014u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TIM_PERF_FREE_CNT_LO  (0x06029000u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TIM_PERF_FREE_CNT_HI  (0x06029004u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TIM_DEFAULT_FREQ_HZ   38400000u                     /* [VERIFIED-CODE] */
 #define NPU_DOORBELL_0            (0x06300000u + NPU_WIN_SHIFT) /* [DERIVED] */
 #define NPU_CONSOLE_TAG           0xCC000000u                   /* [VERIFIED-HW] */
 
@@ -88,10 +100,18 @@ typedef int32_t  s32;
 #define NPU_GRLIB_L2C_FLUSH       (NPU_GRLIB_L2C_BASE + 0x08u)
 #define NPU_GRLIB_L2C_MTRR(i)     (NPU_GRLIB_L2C_BASE + 0x80u + 4u * (i))
 
-#define NPU_L2C_OP_CLEAN_LINE     1u
+#define NPU_L2C_CTRL_EN           (1u << 31)
+#define NPU_L2C_CTRL_ENABLE_VAL   0x80000001u /* [VERIFIED-CODE] */
+#define NPU_L2C_MTRR_SHARED_UNCACHED 0x9000FFE1u /* 0x90000000..0x90200000, AC=0, EN=1 */
+#define NPU_SHARED_UNCACHED_SIZE  0x00200000u
+
+#define NPU_L2C_OP_INV_LINE       1u
+#define NPU_L2C_OP_CLEAN_LINE     2u
 #define NPU_L2C_OP_FLUSH_LINE     3u
 #define NPU_L2C_OP_INV_ALL        5u
 #define NPU_L2C_OP_FLUSH_ALL      7u
+
+#define NPU_L1_CCR_DEFAULT        0x0001000Fu /* [VERIFIED-CODE] IB=1 | DCS=3 | ICS=3 */
 
 #define NPU_CMX_BASE              0x2E000000u /* [VERIFIED-CODE] */
 #define NPU_CMX_TILE_STRIDE       0x200000u   /* [DERIVED] */
@@ -280,6 +300,7 @@ static inline void mmio_write32(u32 addr, u32 val)
 _Static_assert(sizeof(struct npu_fw_header) == 0xCC, "npu_fw_header size");
 _Static_assert(offsetof(struct npu_fw_header, runtime_size) == 0x94, "fw hdr runtime");
 _Static_assert(sizeof(struct npu_boot_params) == 0x1000, "bp size 4KB");
+_Static_assert(offsetof(struct npu_boot_params, perf_clk_frequency) == 0x54, "bp perf_clk");
 _Static_assert(offsetof(struct npu_boot_params, ipc_header_area_start) == 0x100, "bp ipc_hdr");
 _Static_assert(offsetof(struct npu_boot_params, ipc_payload_area_start) == 0x118, "bp ipc_payload");
 _Static_assert(offsetof(struct npu_boot_params, vpu_scheduling_mode) == 0x470, "bp sched");

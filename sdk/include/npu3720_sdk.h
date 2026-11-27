@@ -11,10 +11,19 @@ void npu_init(const char *fw_name);
 void npu_poll(void);
 
 /* Cache / GRLIB L2C (0x27000000) */
+u32  npu_l1_ccr_read(void);
+void npu_l1_ccr_write(u32 val);
+u32  npu_l1_ccr_initial(void);
 void npu_l1_dcache_flush(void);
+void npu_l1_set_flush_enabled(int en);
+int  npu_l1_is_flush_enabled(void);
 void npu_l2c_clean_range(u32 addr, u32 size);
 void npu_l2c_flush_all(void);
 void npu_l2c_set_mtrr(u32 idx, u32 addr, u32 mask, u32 access_ctrl, int wp, int enable);
+int  npu_l2c_configure_shared_uncached(void);
+int  npu_l2c_is_mtrr_active(void);
+u32  npu_l2c_ctrl_initial(void);
+u32  npu_l2c_stat_initial(void);
 
 /* Logging (fw_log @ 0x90000000) */
 void npu_log_init(const char *name);
@@ -32,9 +41,10 @@ void npu_jsm_poll(void);
 u32  npu_jsm_count(void);
 u32  npu_jsm_last_type(void);
 
-/* Timer (0x2602009C) */
+/* Timer (TIM_PERF_FREE_CNT @ 0x26029000) */
 void npu_timer_init(void);
 u32  npu_ticks(void);
+void npu_ticks64(u32 *lo, u32 *hi);
 u32  npu_timer_freq_hz(void);
 u32  npu_uptime_ms(void);
 

@@ -63,9 +63,12 @@ window_overflow:
     mov     %wim, %l3
     sll     %l3, 7, %l4
     srl     %l3, 1, %l3
-    or      %l3, %l4, %l3
+    /* Carry rotated WIM in %g1 across save (trap_entry_5 already clobbers %g1);
+     * writing new WIM before save would set WIM[new_cwp]=1 and cause error mode. */
+    or      %l3, %l4, %g1
+    and     %g1, 0xFF, %g1
     save
-    mov     %l3, %wim
+    mov     %g1, %wim
     nop
     nop
     nop
@@ -89,6 +92,7 @@ window_underflow:
     sll     %l3, 1, %l4
     srl     %l3, 7, %l3
     or      %l3, %l4, %l3
+    and     %l3, 0xFF, %l3
     mov     %l3, %wim
     nop
     nop

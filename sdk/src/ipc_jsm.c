@@ -34,10 +34,17 @@ void npu_ipc_send(u32 data_addr, u32 data_size, u16 channel)
     h->dst_node = 0;
     h->status = NPU_IPC_HDR_ALLOCATED;
 
-    npu_l1_dcache_flush();
-    if (data_size > 0 && data_addr >= 0x80000000u)
+    if (npu_l1_is_flush_enabled())
+        npu_l1_dcache_flush();
+    if (!npu_l2c_is_mtrr_active()) {
+        if (data_size > 0 && data_addr >= 0x80000000u)
+            npu_l2c_clean_range(data_addr, data_size);
+        npu_l2c_clean_range(hslot, NPU_IPC_SLOT_STRIDE);
+    } else if (data_size > 0 && data_addr >= 0x80000000u &&
+               (data_addr < NPU_SHARED_REGION_BASE ||
+                data_addr >= NPU_SHARED_REGION_BASE + NPU_SHARED_UNCACHED_SIZE)) {
         npu_l2c_clean_range(data_addr, data_size);
-    npu_l2c_clean_range(hslot, NPU_IPC_SLOT_STRIDE);
+    }
 
     mmio_write32(NPU_D2H_FIFO_WRITE, (hslot & ~0x3Fu) | NPU_D2H_DESC_SRC_ID_CORE0);
     hdr_slot++;

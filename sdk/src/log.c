@@ -38,10 +38,15 @@ void npu_log_init(const char *name)
 
 void npu_log_flush(void)
 {
-    npu_l1_dcache_flush();
-    npu_l2c_clean_range(NPU_LOG_CRIT_BUF + 0x40u, 0x40u);
+    int mtrr = npu_l2c_is_mtrr_active();
+
+    if (npu_l1_is_flush_enabled())
+        npu_l1_dcache_flush();
+    if (!mtrr)
+        npu_l2c_clean_range(NPU_LOG_CRIT_BUF + 0x40u, 0x40u);
     if (log_pos > log_flushed_pos) {
-        npu_l2c_clean_range(NPU_LOG_CRIT_BUF + log_flushed_pos, log_pos - log_flushed_pos);
+        if (!mtrr)
+            npu_l2c_clean_range(NPU_LOG_CRIT_BUF + log_flushed_pos, log_pos - log_flushed_pos);
         log_flushed_pos = log_pos;
     }
 }
