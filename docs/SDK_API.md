@@ -148,6 +148,16 @@ u32  npu_lnn_get_last_rx_ipc_word(void);
 
 - `npu_leonnn_start(entry_addr)` prepares the runtime, pulses reset, and launches Core 1 at `entry_addr` (must be 4 KB aligned).
 - `npu_leonnn_send_ipc(word)` pushes a message to LeonNN's hardware FIFO (`0x2F0020F0`).
+
+## NNDMA Engine (`sdk/src/dma.c`)
+
+```c
+void npu_dma_init(void);
+int  npu_dma_copy_1d(unsigned tile, u32 dst, u32 src, u32 len);
+```
+
+- `npu_dma_init()` resets and clock-enables NNDMA engines and decoders across Tile 0 and Tile 1 (`NCE_CPR` mask `0xC00`), configures NOC arbitration (`0x2F004000/6000`), enables all channels (`0x1FF`), and zeroes all 32 Host Interface SSID mapping registers (`0x20340000`) so DMA transactions map to SSID 0 (Global Context, where `fw->mem` `0x84800000..0x88800000` is mapped without SMMU faults).
+- `npu_dma_copy_1d(tile, dst, src, len)` performs a synchronous 1D transfer using a 64-byte descriptor in NNCMX (`DMA_DESC_POOL_BASE` `0x2E008000`). Handles L1D/L2C cache flushes for DDR addresses, kicks Link Agent 0 via `std %o4, [%0]` at `engine + 0x640`, and polls completion at `engine + 0x840`. Returns `0` on success or `-1` on timeout.
 - LeonNN responds back to LeonRT's FIFO (`0x260200F0`) tagged with `NPU_LNN_IPC_TAG` (`0xBB000000`).
 
 ## Writing a New Application

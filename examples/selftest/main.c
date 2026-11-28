@@ -265,6 +265,119 @@ static int test_cpr_cmx(void)
     return 1;
 }
 
+
+/*
+ * DMA test buffers in .bss — placed in DDR by linker.
+ * 64 KB each; used for test_dma_ddr (DDR↔CMX round-trip).
+ */
+static u32 dma_src_buf[64 * 1024 / 4] __attribute__((section(".bss"), aligned(64)));
+static u32 dma_dst_buf[64 * 1024 / 4] __attribute__((section(".bss"), aligned(64)));
+
+/* CMX staging area for DDR↔CMX test, well clear of descriptor pool @ 0x2E008000 */
+#define DMA_CMX_TMP  0x2E030000u
+
+static u32 calc_crc32(const void *data, u32 len)
+{
+    const u8 *p = (const u8 *)data;
+    u32 crc = 0xFFFFFFFFu;
+    for (u32 i = 0; i < len; i++) {
+        crc ^= p[i];
+        for (u32 j = 0; j < 8u; j++)
+            crc = (crc >> 1) ^ (0xEDB88320u & (-(crc & 1u)));
+    }
+    return ~crc;
+}
+
+static int test_dma_cmx(void)
+{
+    volatile u32 *src = (volatile u32 *)0x2E010000u;
+    volatile u32 *dst = (volatile u32 *)0x2E210000u;
+    u32 i, t0, t1, us, mb_s, crc;
+
+    for (i = 0; i < 64u * 1024u / 4u; i++)
+        src[i] = 0xA5000000u | i;
+    for (i = 0; i < 64u * 1024u / 4u; i++)
+        dst[i] = 0u;
+
+    t0 = npu_ticks();
+    if (npu_dma_copy_1d(0, 0x2E210000u, 0x2E010000u, 64u * 1024u) != 0) {
+        npu_log_puts("test_dma_cmx: FAIL DMA timeout\n");
+        return 0;
+    }
+    t1 = npu_ticks();
+
+    for (i = 0; i < 64u * 1024u / 4u; i++) {
+        if (dst[i] != (0xA5000000u | i)) {
+            npu_log_puts("test_dma_cmx: FAIL mismatch @ ");
+            npu_log_dec(i);
+            npu_log_puts(" got=0x");
+            npu_log_hex(dst[i]);
+            npu_log_puts("\n");
+            return 0;
+        }
+    }
+
+    crc  = calc_crc32((const void *)dst, 64u * 1024u);
+    us   = (t1 - t0) / 38u;
+    mb_s = (us > 0u) ? (64u * 1000u / us) : 0u;
+    npu_log_puts("test_dma_cmx: PASS CMX0->CMX1 64KB ");
+    npu_log_dec(us);
+    npu_log_puts(" us (");
+    npu_log_dec(mb_s);
+    npu_log_puts(" MB/s) crc=0x");
+    npu_log_hex(crc);
+    npu_log_puts("\n");
+    return 1;
+}
+
+static int test_dma_ddr(void)
+{
+    u32 i, t0, t1, t2, t3, us_rd, us_wr, mb_s, crc;
+
+    for (i = 0; i < 64u * 1024u / 4u; i++)
+        dma_src_buf[i] = 0xBEEF0000u | i;
+    for (i = 0; i < 64u * 1024u / 4u; i++)
+        dma_dst_buf[i] = 0u;
+
+    t0 = npu_ticks();
+    if (npu_dma_copy_1d(0, DMA_CMX_TMP, (u32)(uintptr_t)dma_src_buf, 64u * 1024u) != 0) {
+        npu_log_puts("test_dma_ddr: FAIL DDR->CMX timeout\n");
+        return 0;
+    }
+    t1 = npu_ticks();
+
+    t2 = npu_ticks();
+    if (npu_dma_copy_1d(0, (u32)(uintptr_t)dma_dst_buf, DMA_CMX_TMP, 64u * 1024u) != 0) {
+        npu_log_puts("test_dma_ddr: FAIL CMX->DDR timeout\n");
+        return 0;
+    }
+    t3 = npu_ticks();
+
+    for (i = 0; i < 64u * 1024u / 4u; i++) {
+        if (dma_dst_buf[i] != (0xBEEF0000u | i)) {
+            npu_log_puts("test_dma_ddr: FAIL mismatch @ ");
+            npu_log_dec(i);
+            npu_log_puts("\n");
+            return 0;
+        }
+    }
+
+    crc   = calc_crc32((const void *)dma_dst_buf, 64u * 1024u);
+    us_rd = (t1 - t0) / 38u;
+    us_wr = (t3 - t2) / 38u;
+    mb_s  = ((us_rd + us_wr) > 0u) ? (2u * 64u * 1000u / (us_rd + us_wr)) : 0u;
+    npu_log_puts("test_dma_ddr: PASS DDR->CMX ");
+    npu_log_dec(us_rd);
+    npu_log_puts(" us CMX->DDR ");
+    npu_log_dec(us_wr);
+    npu_log_puts(" us avg ");
+    npu_log_dec(mb_s);
+    npu_log_puts(" MB/s crc=0x");
+    npu_log_hex(crc);
+    npu_log_puts("\n");
+    return 1;
+}
+
 static int test_leonnn(void)
 {
     struct npu_lnn_mailbox *mb = npu_leonnn_get_mailbox();
@@ -373,7 +486,7 @@ static int test_leonnn(void)
 void kmain(void)
 {
     u32 pass_cnt = 0;
-    const u32 total = 7;
+    const u32 total = 9;
 
     npu_init("NPU3720-SELFTEST");
     npu_console_register(on_console_line);
@@ -392,13 +505,16 @@ void kmain(void)
     pass_cnt += (u32)test_irq();
     pass_cnt += (u32)test_cpr_cmx();
     pass_cnt += (u32)test_leonnn();
+    npu_dma_init();
+    pass_cnt += (u32)test_dma_cmx();
+    pass_cnt += (u32)test_dma_ddr();
 
     if (pass_cnt == total) {
-        npu_log_puts("SELFTEST: PASS (7/7)\n");
+        npu_log_puts("SELFTEST: PASS (9/9)\n");
     } else {
         npu_log_puts("SELFTEST: FAIL (");
         npu_log_dec(pass_cnt);
-        npu_log_puts("/7)\n");
+        npu_log_puts("/9)\n");
     }
 
     /* Stay alive; H2D FIFO console & JSM messages are serviced by IRQ 12 */

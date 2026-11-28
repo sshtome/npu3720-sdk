@@ -21,7 +21,7 @@ Baseline checkpoint: **`v0.1.0`** (`a7fe0f0`) — clean-room firmware builder, `
 | Power & clocks (`CPR` / PUnit) | `0x26010040`, AON islands 5/32/33, `0x20000160`, `0x2F008000..34` | `[VERIFIED-HW]` | **M2 (`v0.3.0`)** |
 | `NNCMX SRAM` | `0x2E000000` (2 × 2 MB tiles, 262 MB/s write) | `[VERIFIED-HW]` | **M2 (`v0.3.0`)** |
 | Dual-core Leon (`LeonNN Core 1`) | `%asr17[31:28]=2`, `0x2F008000`, `LNN ICB 0x2F000000`, `TIM_IPC_FIFO` tag `0xBB000000` | `[VERIFIED-HW]` | **M2 (`v0.3.0`)** |
-| `NNDMA` engine | DDR ↔ CMX descriptors, IRQ, throughput | Open | **M3 (`v0.4.0`)** |
+| `NNDMA` engine | DDR ↔ CMX descriptors, IRQ, throughput | `[VERIFIED-HW]` | **M3 (`v0.4.0`)** |
 | `4× SHAVE DSP` | `0x2F800000+` (`+0x1000/+0x6000/+0x7000`) | Window `[VERIFIED-CODE]` | **M4 (`v0.5.0`)** |
 | `2× NCE / DPU` compute | `0x2EF30000+`, variant/invariant descriptors | Window `[VERIFIED-CODE]` | **M4 (`v0.5.0`)** |
 | Full JSM & `/dev/accel/accel0` offload | `CREATE_CMD_QUEUE`, `SUBMIT_CMD`, `ENGINE_RESET` | Open | **M5 (`v1.0.0`)** |
@@ -46,11 +46,13 @@ Baseline checkpoint: **`v0.1.0`** (`a7fe0f0`) — clean-room firmware builder, `
 - **M2.4 Dual-Core IPC & Selftest (`[VERIFIED-HW]`):** Established bidirectional messaging via `TIM_IPC_FIFO` (LRT → LNN write to `0x2F0020F0`; LNN → LRT write to `0x260200F0` with tag `0xBB000000` demuxed in `npu_jsm_poll()`); verified live CMX mailbox counter; passed `SELFTEST: PASS (7/7)` under `sched_mode=1`.
 - **Checkpoint `v0.3.0` (`Gate M2-A + Gate M2-B PASSED`):** 4 MB CMX operational at 262 MB/s; LeonNN Core 2 boots and communicates over hardware FIFO; automated selftest 7/7 PASS.
 
-### M3 (`v0.4.0`) — NNDMA Engine
+### M3 (`v0.4.0`) — NNDMA Engine ✅ `[VERIFIED-HW]`
 **Goal:** Unlock hardware DMA transfers between DDR and NNCMX SRAM.
-- **M3.1 NNDMA Descriptors & Ring:** Decode `dev[10..11]` NCE DMA controller, descriptor format, 2D strided copy parameters, and interrupt routing.
-- **M3.2 DMA Bandwidth Benchmarking:** Implement asynchronous `npu_dma_copy()` (DDR ↔ CMX), compare against CPU `memcpy`, verify completion interrupts.
-- **Checkpoint `v0.4.0`:** Hardware DMA transfers active and verified on live hardware; tagged `v0.4.0`.
+- **M3.1 NNDMA Descriptors & Subsystem Setup (`[VERIFIED-HW]`):** Decoded NCE DMA Engine T0 (`0x2EF60000`) / T1 (`0x2EF90000`), Decoder T0 (`0x2EF50000`) / T1 (`0x2EF80000`), and NOC arbitration (`0x2F004000/6000`). Configured `NCE_CPR` clocks/resets with Domain 2 mask `0xC00`. Implemented 64-byte descriptor layout in NNCMX (`0x2E008000`) with Little-Endian control word `0x01F803FC`.
+- **M3.2 SMMU Host Interface SSID Translation (`[VERIFIED-HW]`):** Identified and resolved host SMMU Translation Fault (`MMU EVTQ: 0x10`) on DDR accesses: configured 32 entries of `HOST_IF_SSID_MAP` (`0x20340000`) to `0` (SSID 0 = Global Context `fw->mem`), keeping `HOST_IF_TBU_MMUSSIDV` (`0x20360004`) at `0x33`.
+- **M3.3 Link Agent Kick & Coherency (`[VERIFIED-HW]`):** Integrated Link Agent 0 kick port (`engine + 0x640`) via 64-bit atomic store (`std %o4, [%0]`), completion polling via Link Agent last processed descriptor (`+0x840`), and full L1D/L2C cache coherency for DDR memory.
+- **M3.4 Hardware Selftest & Bandwidth Benchmarking (`[VERIFIED-HW]`):** Added `test_dma_cmx` and `test_dma_ddr` with IEEE 802.3 CRC32 verification to `examples/selftest/main.c`. Measured **32,000 MB/s** (32 GB/s, 2 µs) on CMX0 → CMX1 crossbar (CRC `0xD5804E27`), and **392 MB/s** average round-trip on DDR ↔ CMX (CRC `0x68BD09AD`). Passed `SELFTEST: PASS (9/9)` under `sched_mode=1`.
+- **Checkpoint `v0.4.0` (`Gate M3 PASSED`):** Hardware DMA transfers fully operational between DDR and NNCMX SRAM; automated selftest 9/9 PASS.
 
 ### M4 (`v0.5.0`) — Compute Engines: 4× SHAVE DSP & 2× NCE/DPU
 **Goal:** Execute real compute workloads on both programmable DSPs and neural compute hardware.

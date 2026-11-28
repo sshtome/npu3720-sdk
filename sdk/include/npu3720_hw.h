@@ -376,4 +376,43 @@ _Static_assert(sizeof(struct npu_ipc_hdr) == 13, "ipc_hdr size");
 _Static_assert(sizeof(struct npu_jsm_msg) == 128, "jsm size");
 _Static_assert(sizeof(struct npu_tracing_buffer_header) == 128, "trace hdr size");
 
+/* ── Host Interface TBU registers [VERIFIED-CODE from ivpu_hw_37xx_reg_v6.12.h] ── */
+#define NPU_HOST_IF_TBU_MMUSSIDV  (0x00360004u + NPU_WIN_SHIFT) /* 0x20360004 */
+#define NPU_TBU0_MMUSSIDV_MASK    0x00000003u /* TBU0_AWMMUSSIDV | TBU0_ARMMUSSIDV */
+
+/* ── Host Interface SSID Map [VERIFIED-CODE HglHostIfSetSsidMap @ 0x85016604] ── */
+#define NPU_HOST_IF_SSID_MAP_BASE (0x00340000u + NPU_WIN_SHIFT) /* 0x20340000 */
+#define NPU_HOST_IF_SSID_MAP_ENTRIES 32u
+
+/* ── NNDMA [VERIFIED-CODE from stock ELF RE] ─────────────────────────── */
+
+#define NPU_DMA_ENGINE_T0    0x2EF60000u /* [VERIFIED-CODE] */
+#define NPU_DMA_ENGINE_T1    0x2EF90000u /* [VERIFIED-CODE] */
+#define NPU_DMA_DECODER_T0   0x2EF70000u /* [VERIFIED-CODE] */
+#define NPU_DMA_DECODER_T1   0x2EFA0000u /* [VERIFIED-CODE] */
+
+/* Engine register offsets */
+#define NPU_DMA_ENG_CTRL       0x000u  /* bit0 = enable */
+#define NPU_DMA_ENG_FIFO_PORT  0x130u  /* 64-bit enqueue via std: [+0]=desc_phys, [+4]=(prio<<24)|(tag<<8) */
+#define NPU_DMA_ENG_FIFO_STAT  0x140u  /* busy bitmask per core_tag */
+#define NPU_DMA_ENG_LA_HALT    0x210u  /* write (1<<la_id) to halt */
+#define NPU_DMA_ENG_IRQ_CLR    0x220u  /* write (1<<bit) to ack */
+#define NPU_DMA_ENG_ACTIVE_MSK 0x230u
+#define NPU_DMA_ENG_CH_MASK    0x240u  /* write 0x1FF to enable all channels */
+#define NPU_DMA_ENG_CH0_BUSY   0x420u  /* bit19 = channel 0 busy */
+#define NPU_DMA_ENG_CH1_BUSY   0x430u  /* bit19 = channel 1 busy */
+#define NPU_DMA_ENG_LA_STATUS0 0xb40u  /* Link Agent 0: 0=IDLE,1=READY,2=RUNNING,3=PAUSED,4=DONE */
+
+/* Decoder register offsets */
+#define NPU_DMA_DEC_CTRL       0x000u
+#define NPU_DMA_DEC_IRQ_STATUS 0x220u
+#define NPU_DMA_DEC_CH_MASK    0x240u
+
+/* NOC arbitration bases [VERIFIED-CODE from HglDmaEnable @ 0x8503dfbc] */
+#define NPU_DMA_NOC_T0         0x2F004000u
+#define NPU_DMA_NOC_T1         0x2F006000u
+
+/* CPR Domain 2 DMA clock+reset mask (dev[10]=engine, dev[11]=decoder) */
+#define NPU_CPR_DMA_MASK       0xC00u   /* [VERIFIED-CODE] BIT(10)|BIT(11) */
+
 #endif /* NPU3720_HW_H */

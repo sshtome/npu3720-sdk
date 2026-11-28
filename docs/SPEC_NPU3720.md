@@ -44,8 +44,13 @@ Verification tags used in this document:
 | `0x90186000` (8 KB) | `mem_rx` IPC payload area (`128B` JSM slot stride) | `[VERIFIED-HW]` |
 | `0xA0000000` | `global_aliased_pio` — triggers host TBU translation fault and `intel_vpu` MMU event recovery | `[VERIFIED-HW]` |
 | `0x20000000..0x3FFFFFFF` | Internal MMIO window: `CPU_addr = host_BAR0 + 0x20000000` | `[VERIFIED-HW]` |
+| `0x20340000` | Host Interface SSID Map (32 × 4 bytes; default `1`, set to `0` for SSID 0 / Global Context) | `[VERIFIED-HW]` |
+| `0x20360004` | Host Interface TBU MMUSSIDV (`0x33` observed; bit 0 AW / bit 1 AR valid) | `[VERIFIED-HW]` |
 | `0x2E000000` | NNCMX SRAM (4 MB total: Tile 0 `0x2E000000`, Tile 1 `0x2E200000`, 262 MB/s write) | `[VERIFIED-HW]` |
 | `0x2EF30000` | DPU / NCE register window | `[VERIFIED-CODE]` |
+| `0x2EF50000` / `0x2EF80000` | NNDMA Decoder Tile 0 / Tile 1 | `[VERIFIED-HW]` |
+| `0x2EF60000` / `0x2EF90000` | NNDMA Engine Tile 0 / Tile 1 | `[VERIFIED-HW]` |
+| `0x2F004000` / `0x2F006000` | NNDMA NOC Tile 0 / Tile 1 arbitration registers | `[VERIFIED-CODE]` |
 | `0x2F800000` | SHAVE register windows (`+core * 0x100000`, `+0x1000/+0x6000/+0x7000`) | `[VERIFIED-CODE]` |
 
 ---
@@ -99,6 +104,22 @@ Note: LeonNN (`LNN`) has a matching ICB window at `0x2F000000` (`[VERIFIED-CODE]
 
 Note: `0x2D000000` / `0x2D400010..14` belong to a separate subsystem block, not LeonRT's GRLIB L2C.
 
+### 3.4 NNDMA & Host Interface TBU/SSID Map `[VERIFIED-HW]`
+
+| CPU Addr | Host BAR0 | Register | Notes | Status |
+|---|---|---|---|---|
+| `0x20340000 + 4*i` | `0x00340000+` | `HOST_IF_SSID_MAP[0..31]` | Entry mapping aperture to MMU Substream ID (SSID). Default `0x1` targets `rctx` (empty page table). Must be set to `0x0` so DMA accesses target `gctx` (`fw->mem` `0x84800000..0x88800000`). | `[VERIFIED-HW]` |
+| `0x20360004` | `0x00360004` | `HOST_IF_TBU_MMUSSIDV` | `0x00000033` observed. Bit 0 AWMMUSSIDV, bit 1 ARMMUSSIDV. Must NOT be cleared to 0 (SMMU STE `S1DSS=0` terminates non-substream). | `[VERIFIED-HW]` |
+| `0x2EF50000` | `0x0EF50000` | `DMA_DEC_T0_CTRL` | Bit 0: Decoder enable | `[VERIFIED-CODE]` |
+| `0x2EF50008` | `0x0EF50008` | `DMA_DEC_T0_CH_MASK` | Channel enable mask (`0x1FF` = 9 channels) | `[VERIFIED-CODE]` |
+| `0x2EF60000` | `0x0EF60000` | `DMA_ENG_T0_CTRL` | Bit 0: Engine enable | `[VERIFIED-CODE]` |
+| `0x2EF60008` | `0x0EF60008` | `DMA_ENG_T0_CH_MASK` | Channel enable mask (`0x1FF`) | `[VERIFIED-CODE]` |
+| `0x2EF60420` | `0x0EF60420` | `DMA_ENG_T0_CH0_BUSY` | Bit 19: Channel 0 busy | `[VERIFIED-HW]` |
+| `0x2EF60640` | `0x0EF60640` | `DMA_ENG_T0_LA0_KICK` | Link Agent 0 kick port (`std %o4, [%0]`; word0 = desc_phys, word1 = (prio << 24) \| 0x100) | `[VERIFIED-HW]` |
+| `0x2EF60840` | `0x0EF60840` | `DMA_ENG_T0_LA0_LAST` | Link Agent 0 last completed descriptor address (polls to match `desc_phys`) | `[VERIFIED-HW]` |
+| `0x2EF80000` / `0x2EF90000` | `0x0EF80000+` | Tile 1 Decoder & Engine | Identical layout for Tile 1 | `[VERIFIED-HW]` |
+| `0x2F004000` / `0x2F006000` | `0x0F004000+` | Tile 0/1 NOC Arbitration | `+0x0 = 0x3, +0x4 = 0x707, +0x8 = 0x808` | `[VERIFIED-CODE]` |
+
 ---
 
 ## 4. Protocols
@@ -130,3 +151,25 @@ Note: `0x2D000000` / `0x2D400010..14` belong to a separate subsystem block, not 
 - **Inter-Core Messaging (`TIM_IPC_FIFO`):**
   - LeonRT → LeonNN: write `(msg & ~0x3F) | 5` to `0x2F0020F0` (triggers IRQ 12 on `0x2F000000` LNN ICB).
   - LeonNN → LeonRT: write `(msg & ~0x3F) | 7` to `0x260200F0` with `NPU_LNN_IPC_TAG` (`0xBB000000`), demuxed cleanly in `npu_jsm_poll()`.
+
+### 4.5 NNDMA Hardware Subsystem & Descriptors `[VERIFIED-HW]`
+- **Clock & Reset:** Driven by `NCE_CPR` (`0x2F008000+`). Bit 10 (Engine) and Bit 11 (Decoder) in `NCE_CPR_CLK_SET` / `NCE_CPR_RST_SET` (Domain 2 mask `0xC00`). Reset sequence: `RST_CLR` → delay → `CLK_SET` → delay → `RST_SET`.
+- **Host Interface SSID Translation:** Outgoing PCIe/DDR transactions through the Host Interface aperture query `HOST_IF_SSID_MAP[0..31]` (`0x20340000`). If left at reset default `0x1`, the transaction uses `SSID 1`, which faults in the host SMMU with `MMU EVTQ: 0x10 (Translation fault) SSID: 1`. Setting all 32 entries to `0` routes accesses to `SSID 0` (`gctx`), where `fw->mem` (`0x84800000..0x88800000`) is mapped.
+- **Descriptor Layout:** 64-byte descriptor placed in NNCMX SRAM (`0x2E008000`, 64-byte aligned):
+  - `+0x00`: `link_addr` (next descriptor in chain, or `0` for single descriptor)
+  - `+0x04`: `flags` (`0`)
+  - `+0x08`: `ctrl` (`0x01F803FC` on Little-Endian: `burst_lo=0x3F<<2, burst_hi=0xFF>>6, valid=1, no IRQ`)
+  - `+0x0C`: `reserved0` (`0`)
+  - `+0x10`: `src_lo` (32-bit physical source address)
+  - `+0x14`: `src_hi` (`0`)
+  - `+0x18`: `dst_lo` (32-bit physical destination address)
+  - `+0x1C`: `dst_hi` (`0`)
+  - `+0x20`: `length` (byte transfer size)
+  - `+0x24`: `num_planes` (`1` for 1D transfers)
+  - `+0x28..0x3C`: 2D strides and plane parameters (`0` for 1D transfers)
+- **Kick Mechanism:** Enqueued into Link Agent 0 kick port (`engine + 0x640`) via atomic 64-bit store `std %o4, [%0]` where word 0 is `desc_phys` and word 1 is `(prio << 24) | 0x100`.
+- **Completion Polling:** Poll Link Agent 0 last completed register `engine + 0x840` until it matches `desc_phys`, or wait for `CH0_BUSY` (`engine + 0x420`, bit 19) to clear.
+- **Cache Coherency:** DDR source buffers must be flushed (`npu_l1_dcache_flush()` and `npu_l2c_flush_all()`) before kick; DDR destination buffers must be invalidated/flushed after completion.
+- **Measured Bandwidth:**
+  - `CMX0 → CMX1` (64 KB): **32,000 MB/s** (32 GB/s, 2 µs, CRC `0xD5804E27`).
+  - `DDR ↔ CMX` round-trip (64 KB): DDR→CMX 323 µs, CMX→DDR 3 µs, average **392 MB/s** (CRC `0x68BD09AD`).

@@ -104,4 +104,8 @@ typedef void (*npu_console_cb_t)(const char *line);
 void npu_console_register(npu_console_cb_t cb);
 void npu_console_rx_word(u32 word);
 
+/* NNDMA (HglDmaCreateDescriptor / HglDmaEnable RE, sparcel ELF) */
+void npu_dma_init(void);
+int  npu_dma_copy_1d(unsigned tile, u32 dst, u32 src, u32 len);
+
 #endif /* NPU3720_SDK_H */
