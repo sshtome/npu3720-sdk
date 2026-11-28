@@ -22,7 +22,8 @@ Baseline checkpoint: **`v0.1.0`** (`a7fe0f0`) — clean-room firmware builder, `
 | `NNCMX SRAM` | `0x2E000000` (2 × 2 MB tiles, 262 MB/s write) | `[VERIFIED-HW]` | **M2 (`v0.3.0`)** |
 | Dual-core Leon (`LeonNN Core 1`) | `%asr17[31:28]=2`, `0x2F008000`, `LNN ICB 0x2F000000`, `TIM_IPC_FIFO` tag `0xBB000000` | `[VERIFIED-HW]` | **M2 (`v0.3.0`)** |
 | `NNDMA` engine | DDR ↔ CMX descriptors, IRQ, throughput | `[VERIFIED-HW]` | **M3 (`v0.4.0`)** |
-| Hardware SRMMU & L1 Snooping | ASI `0x19` (`ctrl=0x00800000`, CTP r/w OK) on LeonRT/LeonNN, CCR.DS snooping `0x0082400F` | `[VERIFIED-HW]` | **M3 (`v0.4.0`)** |
+| Hardware SRMMU & L1 Snooping | ASI `0x19` (Identity + Virtual Alias `VA 0x10000000 -> PA 0x2E000000`), CCR.DS snooping `0x0082400F` | `[VERIFIED-HW]` | **M3.5 (`v0.4.1`)** |
+| OS Primitives & Bring-Up | `ta 0x10` syscall, `swap`/`ldstub` atomics, FPU, `ICB_FORCE`, `docs/OS_BRINGUP.md` | `[VERIFIED-HW]` | **M3.5 (`v0.4.1`)** |
 | Core Clock & PLL | ~366–384 MHz (~2c/iter @ 209k ticks/1M iter), PUnit WP `0x16` (22) | `[VERIFIED-HW]` | **M3 (`v0.4.0`)** |
 | `4× SHAVE DSP` | `0x2F800000+` (`+0x1000/+0x6000/+0x7000`) | Window `[VERIFIED-CODE]` | **M4 (`v0.5.0`)** |
 | `2× NCE / DPU` compute | `0x2EF30000+`, variant/invariant descriptors | Window `[VERIFIED-CODE]` | **M4 (`v0.5.0`)** |
@@ -55,6 +56,18 @@ Baseline checkpoint: **`v0.1.0`** (`a7fe0f0`) — clean-room firmware builder, `
 - **M3.3 Link Agent Kick & Coherency (`[VERIFIED-HW]`):** Integrated Link Agent 0 kick port (`engine + 0x640`) via 64-bit atomic store (`std %o4, [%0]`), completion polling via Link Agent last processed descriptor (`+0x840`), and full L1D/L2C cache coherency for DDR memory.
 - **M3.4 Hardware Selftest & Bandwidth Benchmarking (`[VERIFIED-HW]`):** Added `test_dma_cmx` and `test_dma_ddr` with IEEE 802.3 CRC32 verification to `examples/selftest/main.c`. Measured **32,000 MB/s** (32 GB/s, 2 µs) on CMX0 → CMX1 crossbar (CRC `0xD5804E27`), and **392 MB/s** average round-trip on DDR ↔ CMX (CRC `0x68BD09AD`). Passed `SELFTEST: PASS (9/9)` under `sched_mode=1`.
 - **Checkpoint `v0.4.0` (`Gate M3 PASSED`):** Hardware DMA transfers fully operational between DDR and NNCMX SRAM; automated selftest 9/9 PASS.
+
+### M3.5 (`v0.4.1`) — Operating System Primitives & Hardware SRMMU ✅ `[VERIFIED-HW]`
+**Goal:** Establish a complete bare-metal foundation for running 3rd-party OS / RTOS kernels with virtual memory.
+- **Hardware SRMMU Driver (`sdk/src/mmu.c`, `[VERIFIED-HW]`):** Built 256-context 1-level 16 MB section translation table; verified identity mapping across MMIO, CMX, and DDR; verified virtual address translation alias (`VA 0x10020000 <-> PA 0x2E020000`).
+- **OS Primitives (`[VERIFIED-HW]`):**
+  - Context switch / syscall dispatcher via software trap `ta 0x10` (`tt = 0x90`, returns `0x4F53`).
+  - SPARC v8 hardware atomics: 32-bit `swap` and 8-bit `ldstub` verified in both DDR and NNCMX SRAM.
+  - Software interrupt / IPI via `ICB_FORCE` (`0x26000250`).
+  - Hardware FPU on LeonRT (`PSR.EF = 1`, `%fsr` zeroed on boot, verified `12.5f + 27.5f = 40.0f`).
+- **Hardware Selftest (`[VERIFIED-HW]`):** Added `test_os_base` verifying all 5 OS primitives in `examples/selftest/main.c`; passed `SELFTEST: PASS (10/10)`.
+- **Comprehensive Documentation:** Created `docs/OS_BRINGUP.md` covering memory layouts, boot handshake, trap setup, MMU, multicore bring-up, and device drivers.
+- **Checkpoint `v0.4.1`:** All OS primitives and SRMMU translation verified on silicon; tagged `v0.4.1`.
 
 ### M4 (`v0.5.0`) — Compute Engines: 4× SHAVE DSP & 2× NCE/DPU
 **Goal:** Execute real compute workloads on both programmable DSPs and neural compute hardware.

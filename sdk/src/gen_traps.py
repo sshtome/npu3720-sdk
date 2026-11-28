@@ -35,6 +35,13 @@ for tt in range(256):
             "    nop",
             "    nop",
         ]
+    elif tt == 0x90:
+        entry += [
+            "    sethi   %hi(syscall_trap_handler), %l0",
+            "    jmp     %l0 + %lo(syscall_trap_handler)",
+            "    nop",
+            "    nop",
+        ]
     elif 0x11 <= tt <= 0x1F:
         entry += [
             f"    mov     {tt}, %l3",

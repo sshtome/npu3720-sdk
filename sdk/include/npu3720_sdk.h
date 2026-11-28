@@ -64,6 +64,32 @@ void npu_irq_global_enable(void);
 void npu_irq_global_disable(void);
 u32  npu_irq_save(void);
 void npu_irq_restore(u32 psr);
+void npu_irq_force(u32 icb_base, u32 irq);
+
+/* OS Primitives: Syscall trap & Atomics */
+u32  npu_syscall_yield(void);
+u32  npu_get_syscall_count(void);
+
+static inline u32 npu_atomic_swap(volatile u32 *addr, u32 val)
+{
+    __asm__ volatile("swap [%1], %0" : "+r"(val) : "r"(addr) : "memory");
+    return val;
+}
+
+static inline u8 npu_atomic_ldstub(volatile u8 *addr)
+{
+    u32 val = 0;
+    __asm__ volatile("ldstub [%1], %0" : "=r"(val) : "r"(addr) : "memory");
+    return (u8)val;
+}
+
+/* SRMMU (SPARC Reference MMU, ASI 0x19 / ASI 0x18) */
+void npu_mmu_init_identity(void);
+void npu_mmu_enable(void);
+void npu_mmu_disable(void);
+u32  npu_mmu_read_ctrl(void);
+u32  npu_mmu_read_sfsr(void);
+u32  npu_mmu_read_sfar(void);
 
 /* Safe memory read (protected by trap 0x09 fault_skip) */
 int  npu_safe_read32(u32 addr, u32 *out);

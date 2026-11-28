@@ -56,9 +56,16 @@ _start:
     nop
     nop
 
-    /* 7) Enable synchronous traps: PIL=15, S=1, ET=1, CWP=0 */
-    set     0x0FA0, %g1
+    /* 7) Enable synchronous traps & FPU: PIL=15, S=1, PS=0, ET=1, EF=1, CWP=0 */
+    set     0x1FA0, %g1
     wr      %g0, %g1, %psr
+    nop
+    nop
+    nop
+
+    /* Clear %fsr (Floating-point State Register) */
+    st      %g0, [%sp - 4]
+    ld      [%sp - 4], %fsr
     nop
     nop
     nop
@@ -145,6 +152,25 @@ fault_skip:
     st      %l4, [%l3 + %lo(g_fault_skipped)]
     jmp     %l2
     rett    %l2 + 4
+
+/* ---- software trap ta 0x10 (tt = 0x90): syscall / yield ---- */
+    .text
+    .global syscall_trap_handler
+    .type syscall_trap_handler, %function
+syscall_trap_handler:
+    sethi   %hi(g_syscall_cnt), %l3
+    ld      [%l3 + %lo(g_syscall_cnt)], %l4
+    add     %l4, 1, %l4
+    st      %l4, [%l3 + %lo(g_syscall_cnt)]
+    set     0x4F53, %i0     /* return "OS" magic in caller's %o0 */
+    jmp     %l2
+    rett    %l2 + 4
+
+    .global g_syscall_cnt
+    .section .bss
+    .align 4
+g_syscall_cnt:
+    .word 0
 
 /* ---- hardware interrupt trampoline (traps 0x11..0x1F, IRL 1..15) ---- */
     .text

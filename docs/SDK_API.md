@@ -87,9 +87,45 @@ void npu_irq_global_enable(void);
 void npu_irq_global_disable(void);
 u32  npu_irq_save(void);
 void npu_irq_restore(u32 psr);
+void npu_irq_force(u32 icb_base, u32 irq);
 ```
 
 - `npu_irq_save()` / `npu_irq_restore()` mask `PIL=15` and restore only `PIL` bits `[11:8]` in `%psr` so register window calls stay safe.
+- `npu_irq_force(icb_base, irq)` forces an interrupt via `ICB_FORCE` register (useful for software IRQs and inter-core IPI). If `icb_base` is `0`, `NPU_ICB_BASE` (`0x26000000`) is used.
+
+## OS Primitives & Atomics
+
+```c
+u32  npu_syscall_yield(void);
+u32  npu_get_syscall_count(void);
+u32  npu_atomic_swap(volatile u32 *addr, u32 val);
+u8   npu_atomic_ldstub(volatile u8 *addr);
+```
+
+- `npu_syscall_yield()` issues software trap `ta 0x10` (`tt = 0x90`), triggering `syscall_trap_handler`, which increments `g_syscall_cnt` and returns magic `0x4F53` (`"OS"`).
+- `npu_get_syscall_count()` returns the number of handled system call traps.
+- `npu_atomic_swap(addr, val)` executes the SPARC v8 hardware `swap` instruction, atomically writing `val` to `addr` and returning the previous value. Verified in DDR and NNCMX SRAM.
+- `npu_atomic_ldstub(addr)` executes the SPARC v8 hardware `ldstub` instruction, atomically setting byte `*addr = 0xFF` and returning the previous byte value.
+
+## SPARC Reference MMU (SRMMU, ASI 0x19)
+
+```c
+void npu_mmu_init_identity(void);
+void npu_mmu_enable(void);
+void npu_mmu_disable(void);
+u32  npu_mmu_read_ctrl(void);
+u32  npu_mmu_read_sfsr(void);
+u32  npu_mmu_read_sfar(void);
+```
+
+- `npu_mmu_init_identity()` configures a 256-context table and Level 1 page table for a 16 MB section identity map:
+  - MMIO & NNCMX (`0x20000000..0x3FFFFFFF`): uncached (`0x7E`).
+  - Firmware DDR (`0x84000000..0x88FFFFFF`): cached (`0xFE`).
+  - Shared DDR (`0x90000000..0x9FFFFFFF`): uncached (`0x7E`).
+  - Virtual Alias: maps `VA 0x10000000..0x10FFFFFF` to `PA 0x2E000000` (NNCMX Tile 0).
+- `npu_mmu_enable()` flushes TLB via ASI `0x18` and sets bit 0 (`E`) in MMU Control Register (`ASI 0x19, 0x000`).
+- `npu_mmu_disable()` clears bit 0 (`E`) and flushes TLB.
+- `npu_mmu_read_ctrl()`, `npu_mmu_read_sfsr()`, `npu_mmu_read_sfar()` inspect MMU state and fault registers.
 
 ## Console
 

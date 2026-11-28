@@ -19,7 +19,10 @@ Verification tags used in this document:
 | I-cache flush | `.word 0x81D82000` (`flush 0x0`) | `[VERIFIED-HW]` |
 | L1 D-cache flush | `sta %g0, [%g0] 0x11` (ASI `0x11`; ASI `0x0F` does not flush L2) | `[VERIFIED-HW]` |
 | L1 D-cache snooping | Synthesized and enabled via CCR bit 23 (`DS`). Writing `CCR \|= (1 << 23)` retains bit 23 (`0x0082400F`). | `[VERIFIED-HW]` |
-| SRMMU (ASI `0x19`) | Present on both LeonRT and LeonNN (`ctrl = 0x00800000`, `E=0`). CTP (`0x100`) read/write verified (`0x12345600`). Stock firmware runs with `E=0` (0 accesses to ASI `0x18/0x19`). | `[VERIFIED-HW]` |
+| SRMMU (ASI `0x19`) | Present on both LeonRT and LeonNN (`ctrl = 0x00800000`, `E=0`). 1-level 16 MB identity mapping and virtual alias (`VA 0x10000000 -> PA 0x2E000000`) verified on hardware (`sdk/src/mmu.c`). | `[VERIFIED-HW]` |
+| Hardware FPU | Present on LeonRT (`PSR.EF=1`). Verified on silicon (`12.5f + 27.5f = 40.0f`). Requires `%fsr` zeroing on boot. LeonNN has no FPU (`-msoft-float`, `PSR.EF=0`). | `[VERIFIED-HW]` |
+| Atomics (`swap`, `ldstub`) | Hardware 32-bit `swap` and 8-bit `ldstub` verified in both DDR and NNCMX SRAM. | `[VERIFIED-HW]` |
+| Software Trap (Syscall) | `ta 0x10` (`tt = 0x90`) verified as OS syscall / yield dispatcher. | `[VERIFIED-HW]` |
 | Core Clock Frequency | ~366–384 MHz at PUnit workpoint `0x16` (22). 1,000,000 loop takes 209,577 ticks (5.457 ms at 38.4 MHz timer). Boot params `min_pll=10`, `max_pll=48`. | `[VERIFIED-HW]` |
 | Signature check | None | `[VERIFIED-HW]` |
 
@@ -27,6 +30,7 @@ Verification tags used in this document:
 - `PSR.ET` must be set to `1` in `crt0.S` before any deep calls or traps: with `ET=0`, `trap 0x05/0x06/0x09` trigger a hardware reset rather than invoking the trap table.
 - Async traps (`tt=0x11..0x1F`) enter with `ET=0` and arbitrary `CWP`: the trampoline must spill if `WIM` bit matches the trap window, raise `PIL=15` and enable `ET=1` before C dispatch, and restore `PSR` without clobbering the current `CWP`.
 - Critical-section helpers (`npu_irq_restore`) must RMW only `PIL` bits `[11:8]` in `%psr`; writing a saved `CWP` across register-window transitions corrupts the return window.
+- FPU Status Register: `%fsr` must be cleared (`st %g0, [%sp - 4]; ld [%sp - 4], %fsr`) after enabling `PSR.EF=1` on LeonRT to clear floating-point exception and condition codes.
 - Writing `0xFFFFFFFF` to `%wim` is ignored; reading `%wim` 3 `nop`s after such a write hangs the core.
 - `clang --target=sparcel-unknown-elf` silently truncates `ta 0x80` to `ta 0` (7-bit trap immediate).
 - Userspace `mmap` of PCI BAR0 returns `0xFFFFFFFF`; host MMIO access requires `ioremap` in kernel space (e.g. `tools/npu_mmio`).
@@ -80,7 +84,7 @@ Verification tags used in this document:
 | `0x26000220 + 4*bank` | `0x06000220+` | `ICB_CLEAR[0..3]` (W1C acknowledge + posted-write readback `[0x26000000]`) | `[VERIFIED-HW]` |
 | `0x26000230` | `0x06000230` | `ICB_ACK` (read winning IRQ index; `>= 128` = spurious) | `[VERIFIED-HW]` |
 | `0x26000240 + 4*bank` | `0x06000240+` | `ICB_ENABLE[0..3]` / `+0x350` `ICB_DISABLE[0..3]` (write mask bit) | `[VERIFIED-HW]` |
-| `0x26000250 + 4*bank` | `0x06000250+` | `ICB_FORCE[0..3]` (software force IRQ) | `[VERIFIED-CODE]` |
+| `0x26000250 + 4*bank` | `0x06000250+` | `ICB_FORCE[0..3]` (software force IRQ) | `[VERIFIED-HW]` |
 | `0x26010040` | `0x06010040` | `CPR_LEON_RT_VEC` | `[DERIVED]` |
 | `0x2602009C` | `0x0602009C` | `TIM_WATCHDOG` (stalls when `TIM_WDOG_EN=0`) | `[VERIFIED-HW]` |
 | `0x260200A4` | `0x060200A4` | `TIM_WDOG_EN` (write `0` to disable watchdog) | `[VERIFIED-HW]` |

@@ -376,6 +376,16 @@ _Static_assert(sizeof(struct npu_ipc_hdr) == 13, "ipc_hdr size");
 _Static_assert(sizeof(struct npu_jsm_msg) == 128, "jsm size");
 _Static_assert(sizeof(struct npu_tracing_buffer_header) == 128, "trace hdr size");
 
+/* ── SRMMU Registers (ASI 0x19) [VERIFIED-HW] ── */
+#define NPU_SRMMU_CTRL       0x000u /* MMU Control Register */
+#define NPU_SRMMU_CTPR       0x100u /* Context Table Pointer Register */
+#define NPU_SRMMU_CTR        0x200u /* Context Register */
+#define NPU_SRMMU_SFSR       0x300u /* Synchronous Fault Status Register */
+#define NPU_SRMMU_SFAR       0x400u /* Synchronous Fault Address Register */
+
+#define NPU_SRMMU_CTRL_E     0x00000001u /* MMU Enable bit */
+#define NPU_SRMMU_CTRL_NF    0x00000002u /* No Fault bit */
+
 /* ── Host Interface TBU registers [VERIFIED-CODE from ivpu_hw_37xx_reg_v6.12.h] ── */
 #define NPU_HOST_IF_TBU_MMUSSIDV  (0x00360004u + NPU_WIN_SHIFT) /* 0x20360004 */
 #define NPU_TBU0_MMUSSIDV_MASK    0x00000003u /* TBU0_AWMMUSSIDV | TBU0_ARMMUSSIDV */

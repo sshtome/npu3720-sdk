@@ -378,6 +378,106 @@ static int test_dma_ddr(void)
     return 1;
 }
 
+static volatile u32 s_force_fired = 0;
+static void on_force_test_irq(u32 irq, void *ctx)
+{
+    (void)irq; (void)ctx;
+    s_force_fired++;
+}
+
+static int test_os_base(void)
+{
+    /* 1. Software trap: ta 0x10 (syscall/yield) */
+    u32 sc0 = npu_get_syscall_count();
+    u32 sc_ret = npu_syscall_yield();
+    u32 sc1 = npu_get_syscall_count();
+    int ok_syscall = (sc_ret == 0x4F53u) && (sc1 == sc0 + 1u);
+
+    /* 2. Atomic swap & ldstub in DDR */
+    volatile u32 ddr_w = 0x11223344u;
+    u32 sw_ddr = npu_atomic_swap(&ddr_w, 0x55667788u);
+    int ok_swap_ddr = (sw_ddr == 0x11223344u) && (ddr_w == 0x55667788u);
+
+    volatile u8 ddr_b = 0x00u;
+    u8 b1 = npu_atomic_ldstub(&ddr_b);
+    u8 b2 = npu_atomic_ldstub(&ddr_b);
+    int ok_ldstub_ddr = (b1 == 0x00u) && (b2 == 0xFFu) && (ddr_b == 0xFFu);
+
+    /* 3. Atomic swap & ldstub in NNCMX (Tile 0) */
+    volatile u32 *cmx_w = (volatile u32 *)0x2E018000u;
+    *cmx_w = 0xAABBCCDDu;
+    u32 sw_cmx = npu_atomic_swap(cmx_w, 0x12345678u);
+    int ok_swap_cmx = (sw_cmx == 0xAABBCCDDu) && (*cmx_w == 0x12345678u);
+
+    volatile u8 *cmx_b = (volatile u8 *)0x2E018010u;
+    *cmx_b = 0x00u;
+    u8 cb1 = npu_atomic_ldstub(cmx_b);
+    u8 cb2 = npu_atomic_ldstub(cmx_b);
+    int ok_ldstub_cmx = (cb1 == 0x00u) && (cb2 == 0xFFu) && (*cmx_b == 0xFFu);
+
+    /* 4. Interrupt force via ICB_FORCE */
+    s_force_fired = 0;
+    npu_irq_register(100u, on_force_test_irq, NULL);
+    npu_irq_enable(100u, 6u, 0);
+    npu_irq_force(NPU_ICB_BASE, 100u);
+    u32 to = 100000u;
+    while (!s_force_fired && --to)
+        ;
+    npu_irq_disable(100u);
+    int ok_force = (s_force_fired == 1u);
+
+    /* 5. FPU verification on LeonRT */
+    u32 psr_orig = 0, psr_after = 0;
+    __asm__ volatile("rd %%psr, %0" : "=r"(psr_orig));
+    __asm__ volatile("wr %0, %%psr; nop; nop; nop" :: "r"(psr_orig | (1u << 12)));
+    __asm__ volatile("rd %%psr, %0" : "=r"(psr_after));
+    int ef_set = (psr_after & (1u << 12)) != 0;
+    volatile float fa = 12.5f;
+    volatile float fb = 27.5f;
+    volatile float fc = fa + fb;
+    u32 fc_bits = *(volatile u32 *)&fc;
+    int ok_fpu = ef_set && (fc_bits == 0x42200000u);
+
+    /* 6. SRMMU Identity + Virtual Alias (0x10020000 -> 0x2E020000) */
+    npu_mmu_init_identity();
+    npu_mmu_enable();
+    u32 ctrl_on = npu_mmu_read_ctrl();
+    int mmu_on = (ctrl_on & NPU_SRMMU_CTRL_E) != 0;
+
+    volatile u32 *pa_cmx = (volatile u32 *)0x2E020000u;
+    volatile u32 *va_cmx = (volatile u32 *)0x10020000u;
+
+    *pa_cmx = 0xCAFEBABEu;
+    u32 va_read = *va_cmx;
+    *va_cmx = 0x12345678u;
+    u32 pa_read = *pa_cmx;
+
+    npu_mmu_disable();
+    u32 ctrl_off = npu_mmu_read_ctrl();
+    int mmu_off = ((ctrl_off & NPU_SRMMU_CTRL_E) == 0);
+
+    int ok_mmu = mmu_on && (va_read == 0xCAFEBABEu) && (pa_read == 0x12345678u) && mmu_off;
+
+    int all_ok = ok_syscall && ok_swap_ddr && ok_ldstub_ddr &&
+                 ok_swap_cmx && ok_ldstub_cmx && ok_force && ok_fpu && ok_mmu;
+
+    npu_log_puts("test_os_base: ");
+    npu_log_puts(all_ok ? "PASS" : "FAIL");
+    npu_log_puts(" ta10=");
+    npu_log_puts(ok_syscall ? "OK" : "FAIL");
+    npu_log_puts(" atomics=");
+    npu_log_puts((ok_swap_ddr && ok_ldstub_ddr && ok_swap_cmx && ok_ldstub_cmx) ? "OK" : "FAIL");
+    npu_log_puts(" force_irq=");
+    npu_log_puts(ok_force ? "OK" : "FAIL");
+    npu_log_puts(" fpu=");
+    npu_log_puts(ok_fpu ? "OK" : "FAIL");
+    npu_log_puts(" srmmu_alias=");
+    npu_log_puts(ok_mmu ? "OK" : "FAIL");
+    npu_log_puts("\n");
+
+    return all_ok;
+}
+
 static int test_leonnn(void)
 {
     struct npu_lnn_mailbox *mb = npu_leonnn_get_mailbox();
@@ -629,7 +729,7 @@ static void probe_sysinfo_hardware(void)
 void kmain(void)
 {
     u32 pass_cnt = 0;
-    const u32 total = 9;
+    const u32 total = 10;
 
     npu_init("NPU3720-SELFTEST");
     npu_console_register(on_console_line);
@@ -651,15 +751,16 @@ void kmain(void)
     npu_dma_init();
     pass_cnt += (u32)test_dma_cmx();
     pass_cnt += (u32)test_dma_ddr();
+    pass_cnt += (u32)test_os_base();
 
     probe_sysinfo_hardware();
 
     if (pass_cnt == total) {
-        npu_log_puts("SELFTEST: PASS (9/9)\n");
+        npu_log_puts("SELFTEST: PASS (10/10)\n");
     } else {
         npu_log_puts("SELFTEST: FAIL (");
         npu_log_dec(pass_cnt);
-        npu_log_puts("/9)\n");
+        npu_log_puts("/10)\n");
     }
 
     /* Stay alive; H2D FIFO console & JSM messages are serviced by IRQ 12 */

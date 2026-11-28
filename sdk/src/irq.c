@@ -79,6 +79,17 @@ void npu_irq_disable(u32 irq)
     (void)mmio_read32(NPU_ICB_BASE);
 }
 
+void npu_irq_force(u32 icb_base, u32 irq)
+{
+    if (irq >= NPU_ICB_NUM_IRQS)
+        return;
+    u32 base = icb_base ? icb_base : NPU_ICB_BASE;
+    u32 bank = irq >> 5;
+    u32 bit  = 1u << (irq & 31u);
+    mmio_write32(base + 0x250u + 4u * bank, bit);
+    (void)mmio_read32(base);
+}
+
 u32 npu_irq_count(u32 irq)
 {
     if (irq >= NPU_ICB_NUM_IRQS)

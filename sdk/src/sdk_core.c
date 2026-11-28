@@ -49,3 +49,17 @@ int npu_safe_read32(u32 addr, u32 *out)
         *out = val;
     return 0;
 }
+
+extern volatile u32 g_syscall_cnt;
+
+u32 npu_syscall_yield(void)
+{
+    register u32 ret __asm__("o0");
+    __asm__ volatile("ta 0x10" : "=r"(ret) :: "memory");
+    return ret;
+}
+
+u32 npu_get_syscall_count(void)
+{
+    return g_syscall_cnt;
+}
