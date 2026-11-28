@@ -1,0 +1,29 @@
+#
+# Minimal defconfig for Intel NPU 3720 (LeonRT SPARC v8 Little-Endian)
+# Target: Linux 6.6 LTS, ARCH=sparc, CONFIG_SPARC_LEON=y
+#
+CONFIG_SPARC=y
+CONFIG_SPARC32=y
+CONFIG_SPARC_LEON=y
+# CONFIG_SMP is not set
+# CONFIG_MODULES is not set
+# CONFIG_NET is not set
+# CONFIG_BLOCK is not set
+# CONFIG_PCI is not set
+# CONFIG_USB is not set
+CONFIG_PRINTK=y
+CONFIG_EARLY_PRINTK=y
+CONFIG_EXPERT=y
+CONFIG_EMBEDDED=y
+CONFIG_BINFMT_ELF=y
+CONFIG_PREEMPT_NONE=y
+CONFIG_HZ_100=y
+CONFIG_HZ=100
+CONFIG_SLUB=y
+# CONFIG_SWAP is not set
+# CONFIG_SYSFS is not set
+# CONFIG_PROC_FS is not set
+# CONFIG_IO_URING is not set
+# CONFIG_FTRACE is not set
+# CONFIG_WATCHDOG is not set
+# CONFIG_SUN_OPENPROMFS is not set
