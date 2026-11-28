@@ -47,9 +47,11 @@ sudo ./tools/run_test.sh restore
 
 ## Documentation
 
-- [docs/OS_BRINGUP.md](docs/OS_BRINGUP.md) — Comprehensive guide for porting and running 3rd-party OS / RTOS kernels (RTEMS, Zephyr, FreeRTOS).
+- [docs/README.md](docs/README.md) — Documentation index, SDK architecture map, and subsystem readiness summary.
 - [docs/SPEC_NPU3720.md](docs/SPEC_NPU3720.md) — Hardware memory map, MMIO registers, protocols, L2C/MTRR, and LeonRT quirks.
 - [docs/SDK_API.md](docs/SDK_API.md) — C API reference (`npu3720_sdk.h`), trap model, and writing custom applications.
+- [docs/OS_BRINGUP.md](docs/OS_BRINGUP.md) — Comprehensive guide for porting and running 3rd-party OS / RTOS kernels (RTEMS, Zephyr, FreeRTOS).
+- [docs/ROADMAP.md](docs/ROADMAP.md) — Project milestones, verification status matrix, and progress.
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — Toolchain setup, safe testing, `llvm-objdump`, `pahole`, and `bpftrace` workflows.
 
 ## License

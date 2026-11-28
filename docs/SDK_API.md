@@ -55,6 +55,13 @@ u32  npu_jsm_count(void);
 u32  npu_jsm_last_type(void);
 ```
 
+- `npu_ipc_init()` reads ring buffer base addresses from `boot_params` (`0x84800000`).
+- `npu_ipc_enable_irq()` enables H2D FIFO incoming message interrupt (`IRQ 12`).
+- `npu_ipc_send(data_addr, data_size, channel)` builds an IPC descriptor, performs cache flushes, and enqueues to `D2H_FIFO_WRITE` (`0x200200F0`).
+- `npu_ipc_send_boot()` sends the initial `"BOOT"` handshake on channel `0x3FF`.
+- `npu_jsm_poll()` pops messages from `H2D_FIFO_ATM`, demuxes console words (`0xCCxxxxxx`), LeonNN IPC (`0xBBxxxxxx`), and responds to JSM requests (`0x1113`, `0x1104`).
+- `npu_jsm_count()` and `npu_jsm_last_type()` return telemetry statistics on processed JSM requests.
+
 ## Timer & Safe Memory Read
 
 ```c
@@ -132,9 +139,10 @@ u32  npu_mmu_read_sfar(void);
 ```c
 typedef void (*npu_console_cb_t)(const char *line);
 void npu_console_register(npu_console_cb_t cb);
+void npu_console_rx_word(u32 word);
 ```
 
-Register a line callback before entering the `npu_poll()` loop. See `examples/shell/main.c` for a complete interactive shell, and `examples/selftest/main.c` for an automated hardware test suite covering L2C/MTRR, register windows, `fault_skip`, timer ticks, and ICB interrupts.
+Register a line callback before entering the `npu_poll()` loop. Incoming host words (`0xCCxxxxxx`) are routed to `npu_console_rx_word()`, which decodes 2 ASCII characters from bits `[21:6]` into the line buffer. See `examples/shell/main.c` for a complete interactive shell, and `examples/selftest/main.c` for an automated hardware test suite covering L2C/MTRR, register windows, `fault_skip`, timer ticks, and ICB interrupts.
 
 ## CPR & Power Management
 
@@ -155,7 +163,7 @@ u32 npu_cpr_punit_status(void);
 ```c
 int  npu_cmx_probe(void);
 int  npu_cmx_test_rw_integrity(void);
-void npu_cmx_benchmark(u32 *cmx_w, u32 *cmx_r, u32 *ddr_w, u32 *ddr_r);
+void npu_cmx_benchmark(u32 *cmx_write_mbs, u32 *cmx_read_mbs, u32 *ddr_write_mbs, u32 *ddr_read_mbs);
 ```
 
 - `npu_cmx_probe()` verifies that both Tile 0 (`0x2E000000`) and Tile 1 (`0x2E200000`) are accessible.
@@ -171,19 +179,25 @@ struct npu_lnn_mailbox {
     volatile u32 counter;     /* Incremented by Core 1 */
     volatile u32 status;      /* 1 = booted/ready, 2 = stopping */
     volatile u32 last_rx_ipc; /* Last word received via TIM_IPC_FIFO */
+    volatile u32 srmmu_ctrl;  /* Core 1 ASI 0x19 0x000 (or 0xDEADFA09 on fault) */
+    volatile u32 ccr;         /* Core 1 ASI 0x02 0x000 (L1 CCR) */
+    volatile u32 fault_flag;  /* Bit 0: srmmu faulted, Bit 1: ccr faulted */
 };
 
+extern void npu_lnn_start_entry(void);
 int  npu_leonnn_start(u32 entry_addr);
 void npu_leonnn_stop(void);
 int  npu_leonnn_is_running(void);
 struct npu_lnn_mailbox *npu_leonnn_get_mailbox(void);
 void npu_leonnn_send_ipc(u32 word);
+void npu_lnn_on_ipc_word(u32 word);
 u32  npu_lnn_get_rx_ipc_count(void);
 u32  npu_lnn_get_last_rx_ipc_word(void);
 ```
 
 - `npu_leonnn_start(entry_addr)` prepares the runtime, pulses reset, and launches Core 1 at `entry_addr` (must be 4 KB aligned).
 - `npu_leonnn_send_ipc(word)` pushes a message to LeonNN's hardware FIFO (`0x2F0020F0`).
+- `npu_lnn_on_ipc_word(word)` is called by `npu_jsm_poll()` when LeonNN responds with a `0xBB000000` tagged word.
 
 ## NNDMA Engine (`sdk/src/dma.c`)
 

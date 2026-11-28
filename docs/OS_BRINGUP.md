@@ -38,7 +38,7 @@ The Intel NPU 3720 features two 32-bit SPARC v8 processors operating in **Little
            │   0x26028000: System Timers (38.4 MHz)      │
            │   0x27000000: GRLIB L2 Cache Controller     │
            │   0x2E000000: NNCMX SRAM (4 MB, 2 Tiles)    │
-           │   0x2EF50000: NNDMA Decoders & Engines      │
+           │   0x2EF60000..0x2EFA0000: NNDMA Engines & Decoders │
            │   0x2F000000: LeonNN Subsystem & ICB        │
            │   0x2F008000: LeonNN Boot Control           │
 0x84800000 ├──────────────────────────────────────────────┤

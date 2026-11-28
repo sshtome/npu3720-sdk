@@ -55,8 +55,8 @@ Verification tags used in this document:
 | `0x20360004` | Host Interface TBU MMUSSIDV (`0x33` observed; bit 0 AW / bit 1 AR valid) | `[VERIFIED-HW]` |
 | `0x2E000000` | NNCMX SRAM (4 MB total: Tile 0 `0x2E000000`, Tile 1 `0x2E200000`, 262 MB/s write) | `[VERIFIED-HW]` |
 | `0x2EF30000` | DPU / NCE register window | `[VERIFIED-CODE]` |
-| `0x2EF50000` / `0x2EF80000` | NNDMA Decoder Tile 0 / Tile 1 | `[VERIFIED-HW]` |
 | `0x2EF60000` / `0x2EF90000` | NNDMA Engine Tile 0 / Tile 1 | `[VERIFIED-HW]` |
+| `0x2EF70000` / `0x2EFA0000` | NNDMA Decoder Tile 0 / Tile 1 | `[VERIFIED-HW]` |
 | `0x2F004000` / `0x2F006000` | NNDMA NOC Tile 0 / Tile 1 arbitration registers | `[VERIFIED-CODE]` |
 | `0x2F800000` | SHAVE register windows (`+core * 0x100000`, `+0x1000/+0x6000/+0x7000`) | `[VERIFIED-CODE]` |
 
@@ -117,8 +117,8 @@ Note: `0x2D000000` / `0x2D400010..14` belong to a separate subsystem block, not 
 |---|---|---|---|---|
 | `0x20340000 + 4*i` | `0x00340000+` | `HOST_IF_SSID_MAP[0..31]` | Entry mapping aperture to MMU Substream ID (SSID). Default `0x1` targets `rctx` (empty page table). Must be set to `0x0` so DMA accesses target `gctx` (`fw->mem` `0x84800000..0x88800000`). | `[VERIFIED-HW]` |
 | `0x20360004` | `0x00360004` | `HOST_IF_TBU_MMUSSIDV` | `0x00000033` observed. Bit 0 AWMMUSSIDV, bit 1 ARMMUSSIDV. Must NOT be cleared to 0 (SMMU STE `S1DSS=0` terminates non-substream). | `[VERIFIED-HW]` |
-| `0x2EF50000` | `0x0EF50000` | `DMA_DEC_T0_CTRL` | Bit 0: Decoder enable | `[VERIFIED-CODE]` |
-| `0x2EF50008` | `0x0EF50008` | `DMA_DEC_T0_CH_MASK` | Channel enable mask (`0x1FF` = 9 channels) | `[VERIFIED-CODE]` |
+| `0x2EF70000` | `0x0EF70000` | `DMA_DEC_T0_CTRL` | Bit 0: Decoder enable | `[VERIFIED-CODE]` |
+| `0x2EF70008` | `0x0EF70008` | `DMA_DEC_T0_CH_MASK` | Channel enable mask (`0x1FF` = 9 channels) | `[VERIFIED-CODE]` |
 | `0x2EF60000` | `0x0EF60000` | `DMA_ENG_T0_CTRL` | Bit 0: Engine enable | `[VERIFIED-CODE]` |
 | `0x2EF60008` | `0x0EF60008` | `DMA_ENG_T0_CH_MASK` | Channel enable mask (`0x1FF`) | `[VERIFIED-CODE]` |
 | `0x2EF60420` | `0x0EF60420` | `DMA_ENG_T0_CH0_BUSY` | Bit 19: Channel 0 busy | `[VERIFIED-HW]` |

@@ -139,6 +139,11 @@ u32 npu_irq_save(void)
     return old_psr;
 }
 
+/*
+ * Invariant: npu_irq_restore() performs a read-modify-write on %psr touching
+ * ONLY bits [11:8] (PIL). It preserves the current CWP bits [4:0], preventing
+ * register window corruption across deep call stacks or interrupt returns.
+ */
 void npu_irq_restore(u32 psr)
 {
     u32 cur, pil;

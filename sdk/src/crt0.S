@@ -1,6 +1,19 @@
 /*
  * crt0.S — LeonRT (SPARC v8 LE) startup, trap table, window handlers (N=8),
  * fault_skip (trap 0x09), and crash_handler.
+ *
+ * Key Hardware Invariants:
+ * 1. Entry state: BootROM transfers control to _start with PSR.ET=0.
+ *    We must initialize PSR to 0x0F80 (PIL=15, S=1, ET=0, CWP=0), setup stack & BSS,
+ *    set %tbr = 0x84803000, %wim = 2, and then enable traps & FPU via PSR = 0x1FA0
+ *    (PIL=15, S=1, ET=1, EF=1, CWP=0). Without ET=1, synchronous traps hard-reset the core.
+ * 2. Floating-Point: %fsr must be cleared (st %g0; ld %fsr) to reset condition codes.
+ * 3. Window Handlers: NWINDOWS=8. Handlers save %g1 in %l5, clear %wim, rotate %wim
+ *    with 3 nop hazards, save/restore %l0..%i7, and return via jmp %l1; rett %l2.
+ * 4. IRQ Trampoline: Async traps enter with ET=0 and arbitrary CWP. The trampoline
+ *    allocates 144 bytes on the caller's stack, preserves %psr, %y, %g1..%g7, checks
+ *    if the trap window matches %wim and spills if needed, sets PIL=15 & ET=1, dispatches
+ *    to C (npu_irq_dispatch), then safely restores state and returns.
  */
     .text
     .section .text.entry
