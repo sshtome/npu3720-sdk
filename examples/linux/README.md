@@ -97,3 +97,40 @@ make -C examples/linux build
   - **Relocation Validation (Little-Endian byte layout):**
     - `start_kernel` call to `0xf001cf4c`: bytes `e6 11 f5 7f` (opcode `01`, `disp30 = 0x3ff511e6`, LE order confirmed).
     - `sethi 0x3c098e, %i0`: bytes `8e 09 3c 31` (target address `0xf0263ba0` pointing directly to `init_task`, LE order confirmed).
+
+### Step 2.1 — Shim bootloader, early boot patch & unified firmware image ✅
+- **Static Audit of SPARC Early Boot:**
+  - `arch/sparc/kernel/head_32.S`:
+    - Entry point `0xf0004000` (`trapbase`), jumps to `gokernel`.
+    - Detects `already_mapped` if running at `current_pc` (`%l6 = 0`).
+    - Natively attempts to read `%tbr` and copy PROM IRQ 14 clock handler (`copy_prom_lvl14`). On NPU 3720 (no PROM trap table), this causes memory corruption or fault.
+    - Interrogates `romvec->pv_nodeops->no_getprop("compatible")`. If `cputypval[0] == 'l'`, proceeds to `leon_init`.
+    - `leon_init`: reads `%asr17` (`0x02E00587`, Core ID 0) and records `boot_cpu_id`.
+  - `arch/sparc/kernel/leon_kernel.c`:
+    - `leon_init_timers()` attempts to parse `/ambapp0` for Gaisler IRQMP and GPTIMER. Bypassed with fallback logging if `/ambapp0` is absent.
+- **Early Boot Patch (`patches/0002-npu3720-early-boot.patch`):**
+  - `head_32.S`: in `already_mapped`, branch directly to `copy_prom_done` (`b copy_prom_done`), skipping non-existent PROM IRQ 14 copying.
+  - `leon_kernel.c`: in `leon_init_timers()`, safely log and return when `/ambapp0` is missing instead of triggering `BUG()`.
+- **Shim Bootloader (`examples/linux/shim/`):**
+  - Linked at physical base `0x84803000` with stack at `0x84FF0000`.
+  - Initializes SDK core runtime, L2C cache, MTRR for shared DDR, and `fw_log` ring buffer.
+  - Sets up SRMMU Level 1 page tables:
+    - `0xF0000000..0xF2FFFFFF` (48 MB, cached RWX) -> PA `0x85000000..0x87FFFFFF` (Linux kernel text, data, bss).
+    - `0x00000000..0x00FFFFFF` (16 MB, cached RWX) -> PA `0x85000000` (temporary low-memory mirror).
+    - `0x84000000..0x88FFFFFF` (cached identity: firmware runtime).
+    - `0x20000000..0x3FFFFFFF` (uncached identity: MMIO, NNCMX).
+    - `0x90000000..0x9FFFFFFF` (uncached identity: shared DDR `fw_log`, IPC).
+  - Implements minimal `struct linux_romvec` (OpenBoot V0):
+    - Device node operations providing `"compatible" = "leon"`, `"device_type" = "cpu"`, `"mmu-nctx" = 256`.
+    - Memory descriptors advertising 48 MB DDR @ `0x85000000`.
+    - Console output (`pv_putchar`, `pv_nbputchar`, `pv_putstr`) routed directly to `fw_log`.
+    - Boot arguments: `"console=earlyprom earlycon"`.
+  - Enables hardware SRMMU and jumps to Linux entry `0xF0004000` with `%o0 = &romvec`.
+- **Packaging Pipeline (`package_linux.py` & `make image`):**
+  - Extracts `vmlinux.bin` from `vmlinux` using `llvm-objcopy -O binary`.
+  - Constructs `build/fw_linux_unified.bin`:
+    - Offset `0x000000`: `shim.bin` (linked at `0x84803000`, 36,791 bytes).
+    - Zero padding to offset `0x801000` (`0x85004000 - 0x84803000`).
+    - Offset `0x801000`: `vmlinux.bin` (linked at `0xf0004000`, mapped to `0x85004000`, 3,076,624 bytes).
+  - Packs into `build/vpu_37xx_linux.bin` (11,481,616 bytes) via `pack_fw.py`.
+

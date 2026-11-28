@@ -20,7 +20,16 @@ LLVM       := 1
 LLVM_PREFIX := /usr/lib/llvm-21/bin/
 LLVM_FLAGS := LLVM=$(LLVM_PREFIX) LD=$(SPARCEL_LD) ARCH=sparc PATH=$(TOOLCHAIN_DIR)/bin:$(LLVM_PREFIX):$$PATH
 
-all: build
+VMLINUX    := $(SRC_DIR)/vmlinux
+SHIM_DIR   := $(CURDIR)/shim
+SHIM_BIN   := $(SHIM_DIR)/shim.bin
+VMLINUX_BIN := $(BUILD_DIR)/vmlinux.bin
+UNIFIED_BIN := $(BUILD_DIR)/fw_linux_unified.bin
+LINUX_FW_IMG := $(BUILD_DIR)/vpu_37xx_linux.bin
+PACK_FW    := $(CURDIR)/../../tools/pack_fw.py
+OBJCOPY    := $(LLVM_PREFIX)llvm-objcopy
+
+all: image
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -82,12 +91,28 @@ build: config
 	@echo "Building vmlinux (sparcel, LLVM=1, sparcel-linux-gnu-ld)..."
 	$(MAKE) -C $(SRC_DIR) $(LLVM_FLAGS) -j$$(nproc) vmlinux
 
+$(SHIM_BIN):
+	@echo "Building shim bootloader..."
+	$(MAKE) -C $(SHIM_DIR)
+
+$(VMLINUX_BIN): build
+	@echo "Extracting flat vmlinux.bin..."
+	$(OBJCOPY) -O binary $(VMLINUX) $(VMLINUX_BIN)
+
+image: $(SHIM_BIN) $(VMLINUX_BIN)
+	@echo "Packaging unified firmware image $(LINUX_FW_IMG)..."
+	python3 $(CURDIR)/package_linux.py $(SHIM_BIN) $(VMLINUX_BIN) $(UNIFIED_BIN)
+	python3 $(PACK_FW) $(UNIFIED_BIN) -o $(LINUX_FW_IMG) --version "npu3720-linux 6.6.163"
+
 clean:
 	@if [ -d "$(SRC_DIR)" ]; then \
 		$(MAKE) -C $(SRC_DIR) $(LLVM_FLAGS) clean; \
 	fi
+	$(MAKE) -C $(SHIM_DIR) clean
+	rm -f $(VMLINUX_BIN) $(UNIFIED_BIN) $(LINUX_FW_IMG)
 
 distclean:
+	$(MAKE) -C $(SHIM_DIR) clean
 	rm -rf $(BUILD_DIR)
 
-.PHONY: all fetch patch config build clean distclean toolchain
+.PHONY: all fetch patch config build image clean distclean toolchain

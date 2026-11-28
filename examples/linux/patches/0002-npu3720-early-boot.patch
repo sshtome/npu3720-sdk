@@ -1,0 +1,26 @@
+--- a/arch/sparc/kernel/head_32.S
++++ b/arch/sparc/kernel/head_32.S
+@@ -142,6 +142,8 @@
+ 
+ already_mapped:
+ 		mov	0, %l6
++		b	copy_prom_done
++		 nop
+ 
+ 		/* Copy over the Prom's level 14 clock handler. */
+ copy_prom_lvl14:
+--- a/arch/sparc/kernel/leon_kernel.c
++++ b/arch/sparc/kernel/leon_kernel.c
+@@ -326,8 +326,10 @@
+ 	dummy_master_l10_counter = 0;
+ 
+ 	rootnp = of_find_node_by_path("/ambapp0");
+-	if (!rootnp)
+-		goto bad;
++	if (!rootnp) {
++		printk(KERN_INFO "npu3720: /ambapp0 not found, early boot timer bypass\n");
++		return;
++	}
+ 
+ 	/* Find System ID: GRLIB build ID and optional CHIP ID */
+ 	pp = of_find_property(rootnp, "systemid", &len);
