@@ -80,6 +80,25 @@ int  npu_cmx_probe(void);
 int  npu_cmx_test_rw_integrity(void);
 void npu_cmx_benchmark(u32 *cmx_write_mbs, u32 *cmx_read_mbs, u32 *ddr_write_mbs, u32 *ddr_read_mbs);
 
+/* LeonNN (Core 1, %asr17[31:28] == 2) */
+struct npu_lnn_mailbox {
+    volatile u32 magic;       /* 0x4C4E4E31 ("LNN1") */
+    volatile u32 asr17;       /* Core 1 %asr17 */
+    volatile u32 counter;     /* Incremented by Core 1 */
+    volatile u32 status;      /* 1 = booted/ready, 2 = stopping */
+    volatile u32 last_rx_ipc; /* Last word received via TIM_IPC_FIFO */
+};
+
+extern void npu_lnn_start_entry(void);
+int  npu_leonnn_start(u32 entry_addr);
+void npu_leonnn_stop(void);
+int  npu_leonnn_is_running(void);
+struct npu_lnn_mailbox *npu_leonnn_get_mailbox(void);
+void npu_leonnn_send_ipc(u32 word);
+void npu_lnn_on_ipc_word(u32 word);
+u32  npu_lnn_get_rx_ipc_count(void);
+u32  npu_lnn_get_last_rx_ipc_word(void);
+
 /* Bidirectional console (RX via 0xCCxxxxxx H2D words, TX via fw_log) */
 typedef void (*npu_console_cb_t)(const char *line);
 void npu_console_register(npu_console_cb_t cb);

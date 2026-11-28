@@ -99,6 +99,13 @@ void npu_jsm_poll(void)
         return;
     }
 
+    if ((addr & 0xFF000000u) == NPU_LNN_IPC_TAG) {
+        npu_lnn_on_ipc_word(addr);
+        mmio_write32(NPU_H2D_FIFO_ACK, NPU_H2D_POP_ACK_VAL);
+        npu_irq_restore(psr);
+        return;
+    }
+
     hdr = (volatile struct npu_ipc_hdr *)addr;
     req = (volatile struct npu_jsm_msg *)(addr + NPU_IPC_TXBUF_JSM_OFF);
 

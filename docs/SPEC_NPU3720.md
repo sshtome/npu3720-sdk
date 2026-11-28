@@ -44,7 +44,7 @@ Verification tags used in this document:
 | `0x90186000` (8 KB) | `mem_rx` IPC payload area (`128B` JSM slot stride) | `[VERIFIED-HW]` |
 | `0xA0000000` | `global_aliased_pio` — triggers host TBU translation fault and `intel_vpu` MMU event recovery | `[VERIFIED-HW]` |
 | `0x20000000..0x3FFFFFFF` | Internal MMIO window: `CPU_addr = host_BAR0 + 0x20000000` | `[VERIFIED-HW]` |
-| `0x2E000000` | NNCMX SRAM (2 MB/tile, stride `0x200000`) | `[VERIFIED-CODE]` |
+| `0x2E000000` | NNCMX SRAM (4 MB total: Tile 0 `0x2E000000`, Tile 1 `0x2E200000`, 262 MB/s write) | `[VERIFIED-HW]` |
 | `0x2EF30000` | DPU / NCE register window | `[VERIFIED-CODE]` |
 | `0x2F800000` | SHAVE register windows (`+core * 0x100000`, `+0x1000/+0x6000/+0x7000`) | `[VERIFIED-CODE]` |
 
@@ -121,3 +121,12 @@ Note: `0x2D000000` / `0x2D400010..14` belong to a separate subsystem block, not 
 - `npu_tracing_buffer_header` (`0x90000000`, 128 bytes): `vpu_canary_start @ 0x40 = 0xCAFECAFE`, `write_index @ 0x44`, `size @ 0x50`, `header_version @ 0x54 = 1`, `header_size @ 0x56 = 128`, `format @ 0x58 = 0`, `name[16] @ 0x60`.
 - **Console RX (Host → NPU):** `0xCC000000 | (b0 << 6) | (b1 << 14)` written to `H2D_FIFO_WRITE` (`0x060200F0`). Hardware masks `[5:0]`, leaving 16 bits `[21:6]` for 2 ASCII bytes per word.
 - **Console TX (NPU → Host):** written directly to `fw_log` with L1/L2 flush (no `dmesg` spam).
+
+### 4.4 LeonNN (Core 1) Boot & Dual-Core IPC `[VERIFIED-HW]`
+- **Architectural Differences:** LeonRT is `%asr17[31:28] == 0` with FPU; LeonNN is `%asr17[31:28] == 2` with **NO FPU (`PSR.EF=0`)**. LeonNN code must be built with `-msoft-float`. Both cores share NWINDOWS=8 (`%asr17[4:0] == 7`).
+- **Boot Control (`0x2F008000`):** Target address in `[31:12]` (4 KB aligned); `BIT(1)` RUN=1, `BIT(2)` RSTRUN pulse.
+- **Power & Clock Order:** Enable dev 4 bus/dep (`NCE_CPR_CLK_SET` `BIT(1)`, assert then release `NCE_CPR_RST_CLR/SET` `BIT(1)`), write entry address to `0x2F008000`, reset LeonNN core (`NCE_CPR_RST_CLR/SET` `BIT(0)`), pulse `0x2F008000` with `|= 0x6` then `& ~0x4 | 0x2`.
+- **Runtime Environment:** Dedicated 4 KB-aligned trap table (`%tbr`), separate stack (`0x87FE0000`), `PSR=0x0FA0` (`ET=1, PIL=15, S=1`). LeonNN must **not** reinitialize GRLIB L2C (`0x27000000`).
+- **Inter-Core Messaging (`TIM_IPC_FIFO`):**
+  - LeonRT → LeonNN: write `(msg & ~0x3F) | 5` to `0x2F0020F0` (triggers IRQ 12 on `0x2F000000` LNN ICB).
+  - LeonNN → LeonRT: write `(msg & ~0x3F) | 7` to `0x260200F0` with `NPU_LNN_IPC_TAG` (`0xBB000000`), demuxed cleanly in `npu_jsm_poll()`.

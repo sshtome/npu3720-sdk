@@ -18,10 +18,9 @@ Baseline checkpoint: **`v0.1.0`** (`a7fe0f0`) — clean-room firmware builder, `
 | GRLIB L2C MTRR uncached window | `MTRR[0] = 0x9000FFE1` (`0x90000000..0x90200000`), `L2C_CTRL = 0x80040001` | `[VERIFIED-HW]` | **M1 (`v0.2.0`)** |
 | Interrupt controller (`ICB` / LeonRT) | 128-IRQ `ICB @ 0x26000000` (`LNN @ 0x2F000000`), `tt=0x11..0x1F`, `IRQ 12/108` | `[VERIFIED-HW]` | **M1 (`v0.2.0`)** |
 | Automated hardware selftest | `examples/selftest` (`5/5 PASS`) + `tools/run_test.sh selftest` | `[VERIFIED-HW]` | **M1 (`v0.2.0`)** |
-| Power & clocks (`CPR` / PUnit) | `0x26010040`, tile wake/clock gates | Partial `[DERIVED]` | **M2 (`v0.3.0`)** |
-| `NNCMX SRAM` | `0x2E000000` (2 × 2 MB tiles) | Base `[VERIFIED-CODE]` | **M2 (`v0.3.0`)** |
-| LeonRT `SRMMU` & TBU mapping | `ASI 0x18`/`0x19` / TBU interaction | Open | **M2 (`v0.3.0`)** |
-| Dual-core Leon (Core 1 / LNN) | `%asr17[31:28]=1`, `LNN ICB 0x2F000000`, mailbox | Open | **M3 (`v0.4.0`)** |
+| Power & clocks (`CPR` / PUnit) | `0x26010040`, AON islands 5/32/33, `0x20000160`, `0x2F008000..34` | `[VERIFIED-HW]` | **M2 (`v0.3.0`)** |
+| `NNCMX SRAM` | `0x2E000000` (2 × 2 MB tiles, 262 MB/s write) | `[VERIFIED-HW]` | **M2 (`v0.3.0`)** |
+| Dual-core Leon (`LeonNN Core 1`) | `%asr17[31:28]=2`, `0x2F008000`, `LNN ICB 0x2F000000`, `TIM_IPC_FIFO` tag `0xBB000000` | `[VERIFIED-HW]` | **M2 (`v0.3.0`)** |
 | `NNDMA` engine | DDR ↔ CMX descriptors, IRQ, throughput | Open | **M3 (`v0.4.0`)** |
 | `4× SHAVE DSP` | `0x2F800000+` (`+0x1000/+0x6000/+0x7000`) | Window `[VERIFIED-CODE]` | **M4 (`v0.5.0`)** |
 | `2× NCE / DPU` compute | `0x2EF30000+`, variant/invariant descriptors | Window `[VERIFIED-CODE]` | **M4 (`v0.5.0`)** |
@@ -39,18 +38,19 @@ Baseline checkpoint: **`v0.1.0`** (`a7fe0f0`) — clean-room firmware builder, `
 - **M1.7 Hardware Selftest (`[VERIFIED-HW]`):** Added `examples/selftest` (`L2C/MTRR`, register windows `26/26`, `fault_skip @ 0x40000000`, monotonic `timer`, `IRQ 12/108`) and `tools/run_test.sh selftest` (`PASS 5/5`).
 - **Checkpoint `v0.2.0` (`Gate A + Gate B PASSED`):** `sched_mode=1` boots cleanly; `uptime_ms` advances monotonically; `IRQ 12` and `IRQ 108` fire without storm or reset; `MTRR` coherency verified; `SELFTEST: PASS (5/5)`; stock `.zst` firmware restored.
 
-### M2 (`v0.3.0`) — Fast Local Memory, Power/Clocks & MMU
-**Goal:** Enable compute tile SRAM, document power/clock gating, and establish the MMU model.
-- **M2.1 CPR / PUnit:** Reverse-engineer clock enables, PLL/frequency controls, and tile power gating registers; verify read-back `[VERIFIED-HW]`.
-- **M2.2 NNCMX SRAM (`0x2E000000`):** Power on both 2 MB CMX tiles, implement R/W integrity tests, simple bump/pool allocator, and measure CMX vs DDR bandwidth.
-- **M2.3 LeonRT SRMMU:** Inspect `SRMMU` / `TBU` page tables and document either a minimal bare-metal MMU setup or verified identity/bypass requirements.
-- **Checkpoint `v0.3.0`:** Both 2 MB CMX tiles pass R/W integrity checks; `CPR` registers verified on hardware; tagged `v0.3.0`.
+### M2 (`v0.3.0`) — Power/Clocks (`CPR`), `NNCMX SRAM` & `LeonNN` (`Core 1`) ✅ `[VERIFIED-HW]`
+**Goal:** Enable compute tile SRAM, document power/clock gating, boot secondary LeonNN core, and establish dual-core IPC.
+- **M2.1 CPR Power & Clocks (`[VERIFIED-HW]`):** Reverse-engineered full AON island power sequences (Gate Reset/Clk → Trickle → Ramp Delay → Main Power → Poll Status → Clocks → Un-isolate → Release Reset) for NCE Spine (Island 5), Tile 0 (Islands 32, 40, 41) and Tile 1 (Islands 33, 42, 43); configured `TOP_NOC` `NCE_AXI` (`0x20000160 BIT(6)`), `NCE_CPR_NOC_Q_CTRL` (`0x2F008034`), `TILE_AUX_SET` (`0x2F008024`), verified PUnit WP `0x02020016`.
+- **M2.2 NNCMX SRAM 2×2 MB (`[VERIFIED-HW]`):** Powered on all 4 MB SRAM (`0x2E000000..0x2E3FFFFF`), verified bit pattern integrity, measured write bandwidth of **262 MB/s** (15× faster than DDR at 18 MB/s) and read bandwidth of **30 MB/s**.
+- **M2.3 LeonNN Core 1 Bring-Up (`[VERIFIED-HW]`):** Booted secondary SPARC v8 core (`%asr17[31:28] == 2`) via `0x2F008000` with 4 KB alignment; built with `-msoft-float` (zero FPU instructions, `PSR.EF=0`), dedicated 4 KB trap table, separate stack (`0x87FE0000`), `PSR=0x0FA0` (`ET=1`); shared GRLIB L2C untouched.
+- **M2.4 Dual-Core IPC & Selftest (`[VERIFIED-HW]`):** Established bidirectional messaging via `TIM_IPC_FIFO` (LRT → LNN write to `0x2F0020F0`; LNN → LRT write to `0x260200F0` with tag `0xBB000000` demuxed in `npu_jsm_poll()`); verified live CMX mailbox counter; passed `SELFTEST: PASS (7/7)` under `sched_mode=1`.
+- **Checkpoint `v0.3.0` (`Gate M2-A + Gate M2-B PASSED`):** 4 MB CMX operational at 262 MB/s; LeonNN Core 2 boots and communicates over hardware FIFO; automated selftest 7/7 PASS.
 
-### M3 (`v0.4.0`) — Second Leon Core (Core 1) & NNDMA
-**Goal:** Unlock symmetric/asymmetric dual-core Leon execution and hardware DMA transfers.
-- **M3.1 Core 1 Boot & SMP Sync:** Decode `CPR_LEON_RT_VEC` / reset vector for Core 1 (`%asr17[31:28]=1`), configure Core 1 `LNN ICB` (`0x2F000000`), implement mailbox + spinlock primitives, and run a dual-core execution test.
-- **M3.2 NNDMA Driver:** Reverse-engineer descriptor format, submission queues, completion status/IRQ, and implement asynchronous `npu_dma_copy()` (DDR ↔ CMX) with CRC/integrity and throughput checks.
-- **Checkpoint `v0.4.0`:** Core 0 and Core 1 exchange messages concurrently; `NNDMA` transfers DDR ↔ CMX without data corruption; tagged `v0.4.0`.
+### M3 (`v0.4.0`) — NNDMA Engine
+**Goal:** Unlock hardware DMA transfers between DDR and NNCMX SRAM.
+- **M3.1 NNDMA Descriptors & Ring:** Decode `dev[10..11]` NCE DMA controller, descriptor format, 2D strided copy parameters, and interrupt routing.
+- **M3.2 DMA Bandwidth Benchmarking:** Implement asynchronous `npu_dma_copy()` (DDR ↔ CMX), compare against CPU `memcpy`, verify completion interrupts.
+- **Checkpoint `v0.4.0`:** Hardware DMA transfers active and verified on live hardware; tagged `v0.4.0`.
 
 ### M4 (`v0.5.0`) — Compute Engines: 4× SHAVE DSP & 2× NCE/DPU
 **Goal:** Execute real compute workloads on both programmable DSPs and neural compute hardware.

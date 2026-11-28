@@ -78,7 +78,7 @@ def link(inputs, output, base=0x84803000, stack_top=0x87FF0000, map_path=None):
             if s['name'] and (s['info'] >> 4) == 1 and s['shndx'] != 0:
                 globals_[s['name']] = (oi, si)
 
-    order = ['.text.entry', '.text', '.rodata', '.data', '.bss']
+    order = ['.text.entry', '.text', '.text.lnn.entry', '.text.lnn', '.rodata', '.data', '.bss']
     placed = {}
     addr = base
 
@@ -87,7 +87,7 @@ def link(inputs, output, base=0x84803000, stack_top=0x87FF0000, map_path=None):
             for s in secs:
                 if s['name'] == name:
                     a = max(s['align'], 4)
-                    if name == '.text' and oi == 0:
+                    if name in ('.text', '.text.lnn.entry') and (oi == 0 or name == '.text.lnn.entry'):
                         a = 4096
                     addr = (addr + a - 1) & ~(a - 1)
                     placed[(oi, s['orig'])] = addr

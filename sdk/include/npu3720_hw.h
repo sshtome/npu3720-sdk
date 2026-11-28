@@ -144,6 +144,14 @@ typedef int32_t  s32;
 #define NPU_TIM_DEFAULT_FREQ_HZ   38400000u                     /* [VERIFIED-CODE] */
 #define NPU_DOORBELL_0            (0x06300000u + NPU_WIN_SHIFT) /* [DERIVED] */
 #define NPU_CONSOLE_TAG           0xCC000000u                   /* [VERIFIED-HW] */
+#define NPU_LNN_IPC_TAG           0xBB000000u                   /* [VERIFIED-CODE] LNN -> LRT IPC tag */
+
+#define NPU_LNN_FIFO_WRITE        (0x0F0020F0u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] 0x2F0020F0 */
+#define NPU_LNN_FIFO_ATM          (0x0F0020F4u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] 0x2F0020F4 */
+#define NPU_LNN_FIFO_STAT         (0x0F0020FCu + NPU_WIN_SHIFT) /* [VERIFIED-CODE] 0x2F0020FC */
+#define NPU_LNN_FIFO_ACK          (0x0F000220u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] 0x2F000220 ICB_CLEAR bank 1 */
+
+#define NPU_LNN_STACK_TOP         0x87FE0000u                   /* [VERIFIED-CODE] separate stack for Core 1 */
 
 /* ============================================================================
  * 4. MMIO: GRLIB L2C (0x27000000) and Compute Windows

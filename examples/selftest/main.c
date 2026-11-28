@@ -265,10 +265,115 @@ static int test_cpr_cmx(void)
     return 1;
 }
 
+static int test_leonnn(void)
+{
+    struct npu_lnn_mailbox *mb = npu_leonnn_get_mailbox();
+    u32 t0, t1;
+    int started;
+    u32 magic = 0, asr17 = 0, cnt0 = 0, cnt1 = 0;
+    u32 rx_cnt0, rx_cnt1, rx_word = 0;
+    int ok_boot = 0, ok_ipc = 0;
+
+    npu_log_puts("test_leonnn: starting LeonNN at 0x");
+    npu_log_hex((u32)&npu_lnn_start_entry);
+    npu_log_puts("...\n");
+
+    started = npu_leonnn_start((u32)&npu_lnn_start_entry);
+    if (started != 0) {
+        npu_log_puts("test_leonnn: FAIL start rc=");
+        npu_log_dec((u32)(-started));
+        npu_log_puts("\n");
+        return 0;
+    }
+
+    /* Wait for LeonNN mailbox ready (up to 1000 ms) */
+    t0 = npu_uptime_ms();
+    while ((npu_uptime_ms() - t0) < 1000u) {
+        npu_l1_dcache_flush();
+        magic = mb->magic;
+        asr17 = mb->asr17;
+        if (magic == 0x4C4E4E31u && ((asr17 >> 28) & 0xFu) == 2u) {
+            ok_boot = 1;
+            break;
+        }
+    }
+
+    if (!ok_boot) {
+        u32 dsu_ctrl = 0, dsu_pc = 0, dsu_npc = 0;
+        u32 clk_get = 0, rst_get = 0;
+        npu_safe_read32(0x2D000000u, &dsu_ctrl);
+        npu_safe_read32(0x2D400010u, &dsu_pc);
+        npu_safe_read32(0x2D400014u, &dsu_npc);
+        npu_safe_read32(NPU_NCE_CPR_CLK_GET, &clk_get);
+        npu_safe_read32(NPU_NCE_CPR_RST_GET, &rst_get);
+        npu_log_puts("test_leonnn: FAIL boot timeout magic=0x");
+        npu_log_hex(magic);
+        npu_log_puts(" asr17=0x");
+        npu_log_hex(asr17);
+        npu_log_puts(" vec=0x");
+        npu_log_hex(mmio_read32(NPU_NCE_CPR_LEON_NN_VEC));
+        npu_log_puts(" clk=0x");
+        npu_log_hex(clk_get);
+        npu_log_puts(" rst=0x");
+        npu_log_hex(rst_get);
+        npu_log_puts(" dsu_ctrl=0x");
+        npu_log_hex(dsu_ctrl);
+        npu_log_puts(" dsu_pc=0x");
+        npu_log_hex(dsu_pc);
+        npu_log_puts(" dsu_npc=0x");
+        npu_log_hex(dsu_npc);
+        npu_log_puts("\n");
+        npu_leonnn_stop();
+        return 0;
+    }
+
+    /* Check counter progress */
+    cnt0 = mb->counter;
+    t0 = npu_uptime_ms();
+    while ((npu_uptime_ms() - t0) < 20u)
+        ;
+    npu_l1_dcache_flush();
+    cnt1 = mb->counter;
+
+    /* Test Bidirectional IPC */
+    rx_cnt0 = npu_lnn_get_rx_ipc_count();
+    npu_leonnn_send_ipc(0x12345600u);
+
+    t1 = npu_uptime_ms();
+    while ((npu_uptime_ms() - t1) < 1000u) {
+        rx_cnt1 = npu_lnn_get_rx_ipc_count();
+        if (rx_cnt1 > rx_cnt0) {
+            rx_word = npu_lnn_get_last_rx_ipc_word();
+            if ((rx_word & 0xFF000000u) == NPU_LNN_IPC_TAG) {
+                ok_ipc = 1;
+                break;
+            }
+        }
+        npu_jsm_poll();
+    }
+
+    npu_leonnn_stop();
+
+    int ok = ok_boot && (cnt1 > cnt0) && ok_ipc;
+    npu_log_puts("test_leonnn: ");
+    npu_log_puts(ok ? "PASS" : "FAIL");
+    npu_log_puts(" core=");
+    npu_log_dec((asr17 >> 28) & 0xFu);
+    npu_log_puts(" asr17=0x");
+    npu_log_hex(asr17);
+    npu_log_puts(" cnt=");
+    npu_log_dec(cnt1);
+    npu_log_puts(" ipc_rx=0x");
+    npu_log_hex(rx_word);
+    npu_log_puts("\n");
+
+    return ok;
+}
+
 void kmain(void)
 {
     u32 pass_cnt = 0;
-    const u32 total = 6;
+    const u32 total = 7;
 
     npu_init("NPU3720-SELFTEST");
     npu_console_register(on_console_line);
@@ -286,13 +391,14 @@ void kmain(void)
     pass_cnt += (u32)test_timer();
     pass_cnt += (u32)test_irq();
     pass_cnt += (u32)test_cpr_cmx();
+    pass_cnt += (u32)test_leonnn();
 
     if (pass_cnt == total) {
-        npu_log_puts("SELFTEST: PASS (6/6)\n");
+        npu_log_puts("SELFTEST: PASS (7/7)\n");
     } else {
         npu_log_puts("SELFTEST: FAIL (");
         npu_log_dec(pass_cnt);
-        npu_log_puts("/6)\n");
+        npu_log_puts("/7)\n");
     }
 
     /* Stay alive; H2D FIFO console & JSM messages are serviced by IRQ 12 */

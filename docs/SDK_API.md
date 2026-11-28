@@ -100,6 +100,56 @@ void npu_console_register(npu_console_cb_t cb);
 
 Register a line callback before entering the `npu_poll()` loop. See `examples/shell/main.c` for a complete interactive shell, and `examples/selftest/main.c` for an automated hardware test suite covering L2C/MTRR, register windows, `fault_skip`, timer ticks, and ICB interrupts.
 
+## CPR & Power Management
+
+```c
+int npu_cpr_init_nce_spine(void);
+int npu_cpr_power_tile0(void);
+int npu_cpr_power_tile1(void);
+int npu_cpr_power_compute_all(void);
+u32 npu_cpr_punit_status(void);
+```
+
+- `npu_cpr_init_nce_spine()` enables AON Island 5, unmasks `TOP_NOC_NCE_AXI` (`0x20000160`), and brings up `NCE_CPR_NOC_Q_CTRL` (`0x2F008034`).
+- `npu_cpr_power_tile0()` / `npu_cpr_power_tile1()` power on AON Islands 32 and 33, pulse `TILE_AUX_SET` (`0x2F008024`), and enable Tile CPR devices.
+- `npu_cpr_punit_status()` returns the active PLL ratio and workpoint mirror from `0x20082020` (e.g. `0x02020016`).
+
+## NNCMX SRAM (4 MB, `0x2E000000`)
+
+```c
+int  npu_cmx_probe(void);
+int  npu_cmx_test_rw_integrity(void);
+void npu_cmx_benchmark(u32 *cmx_w, u32 *cmx_r, u32 *ddr_w, u32 *ddr_r);
+```
+
+- `npu_cmx_probe()` verifies that both Tile 0 (`0x2E000000`) and Tile 1 (`0x2E200000`) are accessible.
+- `npu_cmx_test_rw_integrity()` validates 4 MB bitwise pattern integrity across all slices.
+- `npu_cmx_benchmark()` measures write/read speeds across 64 KB blocks (measured 262 MB/s write on CMX vs 18 MB/s on DDR).
+
+## LeonNN Core 1 (`%asr17[31:28] == 2`) & Dual-Core IPC
+
+```c
+struct npu_lnn_mailbox {
+    volatile u32 magic;       /* 0x4C4E4E31 ("LNN1") */
+    volatile u32 asr17;       /* Core 1 %asr17 */
+    volatile u32 counter;     /* Incremented by Core 1 */
+    volatile u32 status;      /* 1 = booted/ready, 2 = stopping */
+    volatile u32 last_rx_ipc; /* Last word received via TIM_IPC_FIFO */
+};
+
+int  npu_leonnn_start(u32 entry_addr);
+void npu_leonnn_stop(void);
+int  npu_leonnn_is_running(void);
+struct npu_lnn_mailbox *npu_leonnn_get_mailbox(void);
+void npu_leonnn_send_ipc(u32 word);
+u32  npu_lnn_get_rx_ipc_count(void);
+u32  npu_lnn_get_last_rx_ipc_word(void);
+```
+
+- `npu_leonnn_start(entry_addr)` prepares the runtime, pulses reset, and launches Core 1 at `entry_addr` (must be 4 KB aligned).
+- `npu_leonnn_send_ipc(word)` pushes a message to LeonNN's hardware FIFO (`0x2F0020F0`).
+- LeonNN responds back to LeonRT's FIFO (`0x260200F0`) tagged with `NPU_LNN_IPC_TAG` (`0xBB000000`).
+
 ## Writing a New Application
 
 1. Copy `examples/hello/` to `examples/myapp/`.
