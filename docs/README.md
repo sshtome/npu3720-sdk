@@ -18,6 +18,7 @@ To maintain accuracy and avoid synchronization drift, each document has a dedica
 | [DEVELOPMENT.md](DEVELOPMENT.md) | **Developer Workflow:** Toolchain requirements (`clang --target=sparcel-unknown-elf`), build instructions, safe test runner (`tools/run_test.sh`), and debugging workflows (`bpftrace`, `llvm-objdump`). |
 | [ROADMAP.md](ROADMAP.md) | **Project Roadmap & Milestone Verification:** Subsystem coverage matrix, progression across milestones (M1–M5), and verified test results on live silicon. |
 | [GateA_Report.md](GateA_Report.md) | **Gate A Test Report:** Empirical hardware test log from the initial bring-up on Intel Core Ultra 9 285K. |
+| [examples/linux/README.md](../examples/linux/README.md) | **Linux 6.6 LTS Port:** Porting Linux 6.6 LTS (`ARCH=sparc`, `sparcel` Little-Endian) to NPU 3720 with GNU binutils `elf32-sparcel` patch. |
 
 ---
 

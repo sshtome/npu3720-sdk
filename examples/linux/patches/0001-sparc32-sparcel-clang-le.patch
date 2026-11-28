@@ -10,7 +10,19 @@
  CLANG_TARGET_FLAGS		:= $(CLANG_TARGET_FLAGS_$(SRCARCH))
 --- a/arch/sparc/Makefile
 +++ b/arch/sparc/Makefile
-@@ -29,7 +29,7 @@
+@@ -21,7 +21,11 @@
+ #
+ 
+ CHECKFLAGS     += -D__sparc__
++ifeq ($(CONFIG_CPU_LITTLE_ENDIAN),y)
++KBUILD_LDFLAGS := -m elf32_sparcel
++else
+ KBUILD_LDFLAGS := -m elf32_sparc
++endif
+ export BITS    := 32
+ UTS_MACHINE    := sparc
+ 
+@@ -29,7 +33,7 @@
  # versions of gcc.  Some gcc versions won't pass -Av8 to binutils when you
  # give -mcpu=v8.  This silently worked with older bintutils versions but
  # does not any more.
@@ -47,3 +59,33 @@
 +#endif
  
  #endif /* _SPARC_BYTEORDER_H */
+--- a/arch/sparc/include/asm/psr.h
++++ b/arch/sparc/include/asm/psr.h
+@@ -55,10 +55,10 @@
+ 	unsigned int fsr = 0;
+ 
+ 	__asm__ __volatile__(
+-		"st	%%fsr, %1\n\t"
+-		"ld	%1, %0\n\t"
++		"st	%%fsr, [%1]\n\t"
++		"ld	[%1], %0\n\t"
+ 	: "=r" (fsr)
+-	: "m" (fsr_storage));
++	: "r" (&fsr_storage));
+ 
+ 	return fsr;
+ }
+--- a/arch/sparc/kernel/vmlinux.lds.S
++++ b/arch/sparc/kernel/vmlinux.lds.S
+@@ -22,7 +22,11 @@
+ #define SMP_CACHE_BYTES (1 << SMP_CACHE_BYTES_SHIFT)
+ 
+ #ifdef CONFIG_SPARC32
++#ifdef CONFIG_CPU_LITTLE_ENDIAN
++OUTPUT_FORMAT("elf32-sparcel", "elf32-sparcel", "elf32-sparcel")
++#else
+ OUTPUT_FORMAT("elf32-sparc", "elf32-sparc", "elf32-sparc")
++#endif
+ OUTPUT_ARCH(sparc)
+ ENTRY(_start)
+ jiffies = jiffies_64 + 4;

@@ -1,0 +1,158 @@
+--- a/config.sub
++++ b/config.sub
+@@ -1243,7 +1243,7 @@
+ 			| sh | shl \
+ 			| sh[1234] | sh[24]a | sh[24]ae[lb] | sh[23]e | she[lb] | sh[lb]e \
+ 			| sh[1234]e[lb] |  sh[12345][lb]e | sh[23]ele | sh64 | sh64le \
+-			| sparc | sparc64 | sparc64b | sparc64v | sparc86x | sparclet \
++			| sparc | sparcel | sparc64 | sparc64b | sparc64v | sparc86x | sparclet \
+ 			| sparclite \
+ 			| sparcv8 | sparcv9 | sparcv9b | sparcv9v | sv1 | sx* \
+ 			| spu \
+--- a/bfd/elf32-sparc.c
++++ b/bfd/elf32-sparc.c
+@@ -218,6 +218,8 @@
+ 
+ #define TARGET_BIG_SYM	sparc_elf32_vec
+ #define TARGET_BIG_NAME	"elf32-sparc"
++#define TARGET_LITTLE_SYM	sparc_elf32_le_vec
++#define TARGET_LITTLE_NAME	"elf32-sparcel"
+ #define ELF_ARCH	bfd_arch_sparc
+ #define ELF_TARGET_ID	SPARC_ELF_DATA
+ #define ELF_MACHINE_CODE EM_SPARC
+@@ -274,6 +276,9 @@
+ 
+ #include "elf32-target.h"
+ 
++#undef	TARGET_LITTLE_SYM
++#undef	TARGET_LITTLE_NAME
++
+ /* Solaris 2.  */
+ 
+ #undef	TARGET_BIG_SYM
+--- a/bfd/targets.c
++++ b/bfd/targets.c
+@@ -890,6 +890,7 @@
+ extern const bfd_target sh_pe_le_vec;
+ extern const bfd_target sh_pei_le_vec;
+ extern const bfd_target sparc_elf32_vec;
++extern const bfd_target sparc_elf32_le_vec;
+ extern const bfd_target sparc_elf32_sol2_vec;
+ extern const bfd_target sparc_elf32_vxworks_vec;
+ extern const bfd_target sparc_elf64_vec;
+@@ -1300,6 +1301,7 @@
+ 	&sh_pei_le_vec,
+ 
+ 	&sparc_elf32_vec,
++	&sparc_elf32_le_vec,
+ 	&sparc_elf32_sol2_vec,
+ 	&sparc_elf32_vxworks_vec,
+ #ifdef BFD64
+--- a/bfd/config.bfd
++++ b/bfd/config.bfd
+@@ -1378,9 +1378,17 @@
+     want64=true
+     ;;
+ #endif
++  sparcel*-*-linux-*)
++    targ_defvec=sparc_elf32_le_vec
++    targ_selvecs="sparc_elf32_vec"
++    ;;
++  sparcel*-*-*)
++    targ_defvec=sparc_elf32_le_vec
++    targ_selvecs="sparc_elf32_vec"
++    ;;
+   sparc-*-linux-* | sparcv*-*-linux-*)
+     targ_defvec=sparc_elf32_vec
+-    targ_selvecs="sparc_elf64_vec"
++    targ_selvecs="sparc_elf32_le_vec sparc_elf64_vec"
+     ;;
+   sparc-*-vxworks*)
+     targ_defvec=sparc_elf32_vxworks_vec
+--- a/bfd/configure.ac
++++ b/bfd/configure.ac
+@@ -619,6 +619,7 @@
+     sh_pe_le_vec)		 tb="$tb pe-sh.lo coff-sh.lo peigen.lo $coff" ;;
+     sh_pei_le_vec)		 tb="$tb pei-sh.lo coff-sh.lo peigen.lo $coff" ;;
+     sparc_elf32_vec)		 tb="$tb elf32-sparc.lo elfxx-sparc.lo elf-vxworks.lo elf32.lo $elf" ;;
++    sparc_elf32_le_vec)		 tb="$tb elf32-sparc.lo elfxx-sparc.lo elf-vxworks.lo elf32.lo $elf" ;;
+     sparc_elf32_sol2_vec)	 tb="$tb elf32-sparc.lo elfxx-sparc.lo elf-vxworks.lo elf32.lo $elf" ;;
+     sparc_elf32_vxworks_vec)	 tb="$tb elf32-sparc.lo elfxx-sparc.lo elf-vxworks.lo elf32.lo $elf" ;;
+     sparc_elf64_vec)		 tb="$tb elf64-sparc.lo elfxx-sparc.lo elf-vxworks.lo elf64.lo $elf"; target_size=64 ;;
+--- a/bfd/configure
++++ b/bfd/configure
+@@ -16033,6 +16033,7 @@
+     sh_pe_le_vec)		 tb="$tb pe-sh.lo coff-sh.lo peigen.lo $coff" ;;
+     sh_pei_le_vec)		 tb="$tb pei-sh.lo coff-sh.lo peigen.lo $coff" ;;
+     sparc_elf32_vec)		 tb="$tb elf32-sparc.lo elfxx-sparc.lo elf-vxworks.lo elf32.lo $elf" ;;
++    sparc_elf32_le_vec)		 tb="$tb elf32-sparc.lo elfxx-sparc.lo elf-vxworks.lo elf32.lo $elf" ;;
+     sparc_elf32_sol2_vec)	 tb="$tb elf32-sparc.lo elfxx-sparc.lo elf-vxworks.lo elf32.lo $elf" ;;
+     sparc_elf32_vxworks_vec)	 tb="$tb elf32-sparc.lo elfxx-sparc.lo elf-vxworks.lo elf32.lo $elf" ;;
+     sparc_elf64_vec)		 tb="$tb elf64-sparc.lo elfxx-sparc.lo elf-vxworks.lo elf64.lo $elf"; target_size=64 ;;
+--- a/ld/configure.tgt
++++ b/ld/configure.tgt
+@@ -941,8 +941,14 @@
+ 			;;
+ sparc64-*-*)		targ_emul=elf64_sparc
+ 			;;
++sparcel*-*-linux-*)	targ_emul=elf32_sparcel
++			targ_extra_emuls="elf32_sparc"
++			;;
++sparcel*-*-*)		targ_emul=elf32_sparcel
++			targ_extra_emuls="elf32_sparc"
++			;;
+ sparc*-*-linux-*)	targ_emul=elf32_sparc
+-			targ_extra_emuls="elf64_sparc"
++			targ_extra_emuls="elf32_sparcel elf64_sparc"
+ 			targ_extra_libpath=elf64_sparc
+ 			tdir_elf64_sparc=`echo ${targ_alias} | sed -e 's/32//'`
+ 			;;
+--- a/ld/Makefile.am
++++ b/ld/Makefile.am
+@@ -216,6 +216,7 @@
+ 	ed30velf.c \
+ 	eelf32_dlx.c \
+ 	eelf32_sparc.c \
++	eelf32_sparcel.c \
+ 	eelf32_sparc_sol2.c \
+ 	eelf32_sparc_vxworks.c \
+ 	eelf32_spu.c \
+--- a/ld/Makefile.in
++++ b/ld/Makefile.in
+@@ -727,6 +727,7 @@
+ 	ed30velf.c \
+ 	eelf32_dlx.c \
+ 	eelf32_sparc.c \
++	eelf32_sparcel.c \
+ 	eelf32_sparc_sol2.c \
+ 	eelf32_sparc_vxworks.c \
+ 	eelf32_spu.c \
+@@ -1351,6 +1352,7 @@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ed30velf.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32_dlx.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32_sparc.Po@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32_sparcel.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32_sparc_sol2.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32_sparc_vxworks.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32_spu.Po@am__quote@
+--- a/ld/emulparams/elf32_sparcel.sh
++++ b/ld/emulparams/elf32_sparcel.sh
+@@ -0,0 +1,18 @@
++# If you change this file, please also look at files which source this one:
++# elf32_sparc.sh
++
++SCRIPT_NAME=elf
++OUTPUT_FORMAT="elf32-sparcel"
++NO_REL_RELOCS=yes
++TEXT_START_ADDR=0x10000
++MAXPAGESIZE="CONSTANT (MAXPAGESIZE)"
++COMMONPAGESIZE="CONSTANT (COMMONPAGESIZE)"
++ALIGNMENT=8
++ARCH=sparc
++MACHINE=
++TEMPLATE_NAME=elf
++DATA_PLT=
++GENERATE_SHLIB_SCRIPT=yes
++GENERATE_PIE_SCRIPT=yes
++NOP=0x01000000
++NO_SMALL_DATA=yes
