@@ -9,7 +9,8 @@ DEFCONFIG   := $(CURDIR)/npu3720_defconfig
 
 ARCH       := sparc
 LLVM       := 1
-LLVM_FLAGS := LLVM=1 ARCH=sparc
+LLVM_PREFIX := /usr/lib/llvm-21/bin/
+LLVM_FLAGS := LLVM=$(LLVM_PREFIX) ARCH=sparc PATH=$(LLVM_PREFIX):$$PATH
 
 all: build
 
