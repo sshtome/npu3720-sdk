@@ -46,11 +46,30 @@ typedef int32_t  s32;
 #define NPU_WIN_SHIFT             0x20000000u
 
 /* ============================================================================
- * 2. MMIO: HOST_SS (0x20000000 = host BAR0 + 0x00000000)
+ * 2. MMIO: HOST_SS & AON (0x20000000 = host BAR0 + 0x00000000)
  * ========================================================================== */
 
 #define NPU_HW_VERSION            (0x00000108u + NPU_WIN_SHIFT) /* [DERIVED] */
+#define NPU_HOST_SS_GEN_CTRL      (0x00000118u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
 #define NPU_LOADING_ADDRESS_LO    (0x00041040u + NPU_WIN_SHIFT) /* [DERIVED] */
+#define NPU_TOP_NOC_QREQN         (0x00000160u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TOP_NOC_QACCEPTN      (0x00000164u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TOP_NOC_QDENY         (0x00000168u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_TOP_NOC_NCE_AXI       (1u << 6)                     /* BIT(6) = 0x40 */
+
+#define NPU_AON_PWR_ISO_EN0       (0x00030020u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_AON_PWR_EN0           (0x00030024u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_AON_PWR_TRICKLE_EN0   (0x00030028u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_AON_PWR_STAT0         (0x0003002Cu + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+
+#define NPU_AON_PWR_ISO_EN1       (0x00030050u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_AON_PWR_EN1           (0x00030054u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_AON_PWR_TRICKLE_EN1   (0x00030058u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_AON_PWR_STAT1         (0x0003005Cu + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_AON_EN_MASK0          (0x00030060u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+
+#define NPU_PUNIT_WP_CFG_MIRROR   (0x00082020u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+
 #define NPU_D2H_FIFO_WRITE        (0x000200F0u + NPU_WIN_SHIFT) /* [VERIFIED-HW] */
 #define NPU_D2H_FIFO_ATM          (0x000200F4u + NPU_WIN_SHIFT) /* [DERIVED] */
 #define NPU_D2H_FIFO_STAT         (0x000200FCu + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
@@ -81,7 +100,28 @@ typedef int32_t  s32;
 #define NPU_IRQ_TIMER0            108u                          /* [VERIFIED-CODE] */
 #define NPU_LNN_ICB_BASE          (0x0F000000u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] 0x2F000000 */
 
-#define NPU_CPR_LEON_RT_VEC       (0x06010040u + NPU_WIN_SHIFT) /* [DERIVED] */
+#define NPU_CPR_BASE              (0x06010000u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] */
+#define NPU_CPR_CLK_GET           (NPU_CPR_BASE + 0x00u)
+#define NPU_CPR_CLK_SET           (NPU_CPR_BASE + 0x04u)
+#define NPU_CPR_CLK_CLR           (NPU_CPR_BASE + 0x08u)
+#define NPU_CPR_RST_GET           (NPU_CPR_BASE + 0x10u)
+#define NPU_CPR_RST_SET           (NPU_CPR_BASE + 0x14u)
+#define NPU_CPR_RST_CLR           (NPU_CPR_BASE + 0x18u)
+#define NPU_CPR_LEON_RT_VEC       (NPU_CPR_BASE + 0x40u)        /* [DERIVED] */
+#define NPU_CPR_CLK_NCE_MAS       (1u << 9)                     /* BIT(9) = 0x200 */
+
+#define NPU_NCE_CPR_BASE          (0x0F008000u + NPU_WIN_SHIFT) /* [VERIFIED-CODE] 0x2F008000 */
+#define NPU_NCE_CPR_LEON_NN_VEC   (NPU_NCE_CPR_BASE + 0x00u)
+#define NPU_NCE_CPR_CLK_GET       (NPU_NCE_CPR_BASE + 0x08u)
+#define NPU_NCE_CPR_RST_GET       (NPU_NCE_CPR_BASE + 0x0Cu)
+#define NPU_NCE_CPR_CLK_SET       (NPU_NCE_CPR_BASE + 0x14u)
+#define NPU_NCE_CPR_CLK_CLR       (NPU_NCE_CPR_BASE + 0x18u)
+#define NPU_NCE_CPR_RST_SET       (NPU_NCE_CPR_BASE + 0x1Cu)
+#define NPU_NCE_CPR_RST_CLR       (NPU_NCE_CPR_BASE + 0x20u)
+#define NPU_NCE_CPR_TILE_AUX_SET  (NPU_NCE_CPR_BASE + 0x24u)    /* [VERIFIED-CODE] */
+#define NPU_NCE_CPR_TILE_AUX_CLR  (NPU_NCE_CPR_BASE + 0x28u)    /* [VERIFIED-CODE] */
+#define NPU_NCE_CPR_NOC_Q_CTRL    (NPU_NCE_CPR_BASE + 0x34u)    /* [VERIFIED-CODE] */
+
 #define NPU_H2D_FIFO_WRITE        (0x060200F0u + NPU_WIN_SHIFT) /* [VERIFIED-HW] */
 #define NPU_H2D_FIFO_ATM          (0x060200F4u + NPU_WIN_SHIFT) /* [VERIFIED-HW] */
 #define NPU_H2D_FIFO_STAT         (0x060200FCu + NPU_WIN_SHIFT) /* [VERIFIED-HW] */
@@ -129,7 +169,12 @@ typedef int32_t  s32;
 #define NPU_L1_CCR_DEFAULT        0x0001000Fu /* [VERIFIED-CODE] IB=1 | DCS=3 | ICS=3 */
 
 #define NPU_CMX_BASE              0x2E000000u /* [VERIFIED-CODE] */
-#define NPU_CMX_TILE_STRIDE       0x200000u   /* [DERIVED] */
+#define NPU_CMX_TILE_STRIDE       0x200000u   /* [VERIFIED-CODE] 2 MB per tile */
+#define NPU_CMX_TILE_SIZE         0x200000u   /* [VERIFIED-CODE] 2 MB */
+#define NPU_CMX_TOTAL_SIZE        0x400000u   /* [VERIFIED-CODE] 4 MB (2 tiles) */
+#define NPU_CMX_TILE0_BASE        0x2E000000u /* [VERIFIED-CODE] */
+#define NPU_CMX_TILE1_BASE        0x2E200000u /* [VERIFIED-CODE] */
+#define NPU_CMX_BROADCAST_BASE    0x2EC00000u /* [VERIFIED-CODE] */
 #define NPU_DPU_REG_BASE          0x2EF30000u /* [VERIFIED-CODE] */
 #define NPU_SHAVE_REG_BASE        0x2F800000u /* [VERIFIED-CODE] */
 

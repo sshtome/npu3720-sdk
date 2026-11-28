@@ -7,7 +7,8 @@ CFLAGS  := --target=sparcel-unknown-elf -ffreestanding -nostdlib -O2 -Wall -Wext
            -I$(ROOT)/sdk/include -mcpu=v8
 
 SRCS_C  := main.c $(SDK_SRC)/sdk_core.c $(SDK_SRC)/l2c.c $(SDK_SRC)/log.c \
-           $(SDK_SRC)/ipc_jsm.c $(SDK_SRC)/timer.c $(SDK_SRC)/console.c $(SDK_SRC)/irq.c
+           $(SDK_SRC)/ipc_jsm.c $(SDK_SRC)/timer.c $(SDK_SRC)/console.c $(SDK_SRC)/irq.c \
+           $(SDK_SRC)/cpr.c $(SDK_SRC)/cmx.c
 OBJS_C  := $(patsubst %.c,%.o,$(notdir $(SRCS_C)))
 OBJS    := crt0.o $(OBJS_C)
 

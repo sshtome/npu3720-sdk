@@ -216,10 +216,59 @@ static int test_irq(void)
     return ok;
 }
 
+static int test_cpr_cmx(void)
+{
+    int cpr_rc, probe_rc, rw_rc;
+    u32 c_w = 0, c_r = 0, d_w = 0, d_r = 0;
+    u32 punit_wp = npu_cpr_punit_status();
+
+    npu_log_puts("cpr: punit_wp=0x");
+    npu_log_hex(punit_wp);
+    npu_log_puts("\n");
+
+    cpr_rc = npu_cpr_power_compute_all();
+    if (cpr_rc != 0) {
+        npu_log_puts("test_cpr_cmx: CPR FAIL rc=");
+        npu_log_dec((u32)(-cpr_rc));
+        npu_log_puts("\n");
+        return 0;
+    }
+
+    probe_rc = npu_cmx_probe();
+    if (probe_rc != 0) {
+        npu_log_puts("test_cpr_cmx: PROBE FAIL rc=");
+        npu_log_dec((u32)(-probe_rc));
+        npu_log_puts("\n");
+        return 0;
+    }
+
+    rw_rc = npu_cmx_test_rw_integrity();
+    if (rw_rc != 0) {
+        npu_log_puts("test_cpr_cmx: RW FAIL rc=");
+        npu_log_dec((u32)(-rw_rc));
+        npu_log_puts("\n");
+        return 0;
+    }
+
+    npu_cmx_benchmark(&c_w, &c_r, &d_w, &d_r);
+
+    npu_log_puts("test_cpr_cmx: PASS 4MB CMX r/w OK");
+    npu_log_puts(" speed(MB/s): cmx_w=");
+    npu_log_dec(c_w);
+    npu_log_puts(" cmx_r=");
+    npu_log_dec(c_r);
+    npu_log_puts(" ddr_w=");
+    npu_log_dec(d_w);
+    npu_log_puts(" ddr_r=");
+    npu_log_dec(d_r);
+    npu_log_puts("\n");
+    return 1;
+}
+
 void kmain(void)
 {
     u32 pass_cnt = 0;
-    const u32 total = 5;
+    const u32 total = 6;
 
     npu_init("NPU3720-SELFTEST");
     npu_console_register(on_console_line);
@@ -236,13 +285,14 @@ void kmain(void)
     pass_cnt += (u32)test_fault_skip();
     pass_cnt += (u32)test_timer();
     pass_cnt += (u32)test_irq();
+    pass_cnt += (u32)test_cpr_cmx();
 
     if (pass_cnt == total) {
-        npu_log_puts("SELFTEST: PASS (5/5)\n");
+        npu_log_puts("SELFTEST: PASS (6/6)\n");
     } else {
         npu_log_puts("SELFTEST: FAIL (");
         npu_log_dec(pass_cnt);
-        npu_log_puts("/5)\n");
+        npu_log_puts("/6)\n");
     }
 
     /* Stay alive; H2D FIFO console & JSM messages are serviced by IRQ 12 */

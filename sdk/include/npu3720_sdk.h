@@ -68,6 +68,18 @@ void npu_irq_restore(u32 psr);
 /* Safe memory read (protected by trap 0x09 fault_skip) */
 int  npu_safe_read32(u32 addr, u32 *out);
 
+/* Power, Clocks & Reset (CPR) */
+int  npu_cpr_init_nce_spine(void);
+int  npu_cpr_power_tile0(void);
+int  npu_cpr_power_tile1(void);
+int  npu_cpr_power_compute_all(void);
+u32  npu_cpr_punit_status(void);
+
+/* NNCMX SRAM (0x2E000000..0x2E3FFFFF, 2x2 MB) */
+int  npu_cmx_probe(void);
+int  npu_cmx_test_rw_integrity(void);
+void npu_cmx_benchmark(u32 *cmx_write_mbs, u32 *cmx_read_mbs, u32 *ddr_write_mbs, u32 *ddr_read_mbs);
+
 /* Bidirectional console (RX via 0xCCxxxxxx H2D words, TX via fw_log) */
 typedef void (*npu_console_cb_t)(const char *line);
 void npu_console_register(npu_console_cb_t cb);
