@@ -143,8 +143,21 @@ static void on_console_line(const char *line)
             npu_log_dec(w);
             npu_log_puts(")\n");
         }
+    } else if (str_eq(line, "srmmu") || str_eq(line, "sysinfo")) {
+        u32 m_ctrl = 0, m_ctp = 0;
+        u32 off0 = 0x000u, off1 = 0x100u;
+        __asm__ volatile("lda [%1] 0x19, %0" : "=r"(m_ctrl) : "r"(off0) : "memory");
+        __asm__ volatile("lda [%1] 0x19, %0" : "=r"(m_ctp)  : "r"(off1) : "memory");
+        u32 ccr = npu_l1_ccr_read();
+        npu_log_puts("srmmu: ctrl=0x");
+        npu_log_hex(m_ctrl);
+        npu_log_puts(" ctp=0x");
+        npu_log_hex(m_ctp);
+        npu_log_puts(" l1_ccr=0x");
+        npu_log_hex(ccr);
+        npu_log_puts("\n");
     } else if (str_eq(line, "help")) {
-        npu_log_puts("commands: ping | info | ticks | jsm | peek <hex> | l1flush <0|1> | win12 | help\n");
+        npu_log_puts("commands: ping | info | ticks | jsm | peek <hex> | l1flush <0|1> | win12 | srmmu | help\n");
     } else {
         npu_log_puts("unknown cmd: ");
         npu_log_puts(line);

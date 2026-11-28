@@ -18,6 +18,9 @@ Verification tags used in this document:
 | Default `%tbr` | `0x84803000` (256 × 16-byte entries; `tt=0` is reset/entry slot) | `[VERIFIED-HW]` |
 | I-cache flush | `.word 0x81D82000` (`flush 0x0`) | `[VERIFIED-HW]` |
 | L1 D-cache flush | `sta %g0, [%g0] 0x11` (ASI `0x11`; ASI `0x0F` does not flush L2) | `[VERIFIED-HW]` |
+| L1 D-cache snooping | Synthesized and enabled via CCR bit 23 (`DS`). Writing `CCR \|= (1 << 23)` retains bit 23 (`0x0082400F`). | `[VERIFIED-HW]` |
+| SRMMU (ASI `0x19`) | Present on both LeonRT and LeonNN (`ctrl = 0x00800000`, `E=0`). CTP (`0x100`) read/write verified (`0x12345600`). Stock firmware runs with `E=0` (0 accesses to ASI `0x18/0x19`). | `[VERIFIED-HW]` |
+| Core Clock Frequency | ~366–384 MHz at PUnit workpoint `0x16` (22). 1,000,000 loop takes 209,577 ticks (5.457 ms at 38.4 MHz timer). Boot params `min_pll=10`, `max_pll=48`. | `[VERIFIED-HW]` |
 | Signature check | None | `[VERIFIED-HW]` |
 
 ### Known LeonRT Quirks (`[VERIFIED-HW]`)
@@ -119,6 +122,18 @@ Note: `0x2D000000` / `0x2D400010..14` belong to a separate subsystem block, not 
 | `0x2EF60840` | `0x0EF60840` | `DMA_ENG_T0_LA0_LAST` | Link Agent 0 last completed descriptor address (polls to match `desc_phys`) | `[VERIFIED-HW]` |
 | `0x2EF80000` / `0x2EF90000` | `0x0EF80000+` | Tile 1 Decoder & Engine | Identical layout for Tile 1 | `[VERIFIED-HW]` |
 | `0x2F004000` / `0x2F006000` | `0x0F004000+` | Tile 0/1 NOC Arbitration | `+0x0 = 0x3, +0x4 = 0x707, +0x8 = 0x808` | `[VERIFIED-CODE]` |
+
+### 3.5 SPARC Cores Internal Registers (ASI 0x02, ASI 0x19) `[VERIFIED-HW]`
+
+- **L1 Cache Control Register (ASI `0x02`, offset `0x000`):**
+  - Bit 23 (`DS`): Data cache snooping enable. Verified writable and retained (`0x0002400F` → `0x0082400F`).
+  - Bit 17: Cache freeze/status (`0x00020000` default on LeonNN).
+- **SPARC Reference MMU (SRMMU, ASI `0x19`):**
+  - Present and synthesized on both LeonRT (`%asr17` core 0) and LeonNN (`%asr17` core 2).
+  - Offset `0x000` (Control Register): reads `0x00800000` on both cores (bit 23 IMPL/VER = 1, bit 0 `E = 0` disabled).
+  - Offset `0x100` (Context Table Pointer): read/write verified on silicon (write `0x12345600` reads back `0x12345600`).
+  - Offsets `0x200` (CTX), `0x300` (SFSR), `0x400` (SFAR): all readable with value `0x00000000`.
+  - Stock Intel firmware (`vpu_firmware.elf`) operates with SRMMU disabled (`E = 0`) and contains zero instructions referencing ASI `0x18` or `0x19`.
 
 ---
 

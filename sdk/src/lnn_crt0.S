@@ -42,8 +42,22 @@ lnn_trap_table:
     nop
     nop
 
-    /* Slots 7..255: default ta 0 */
-    .rept 249
+    /* Slots 7..8 */
+    .rept 2
+    ta      0
+    nop
+    nop
+    nop
+    .endr
+
+    /* Slot 9: data_access_exception (fault_skip) */
+    sethi   %hi(lnn_fault_skip), %l0
+    jmp     %l0 + %lo(lnn_fault_skip)
+    nop
+    nop
+
+    /* Slots 10..255: default ta 0 */
+    .rept 246
     ta      0
     nop
     nop
@@ -84,6 +98,16 @@ lnn_window_overflow:
     mov     %l5, %g1
     jmp     %l1
     rett    %l2
+
+/* ---- data access exception (trap 0x09): record flag & skip faulting insn ---- */
+    .global lnn_fault_skip
+    .type lnn_fault_skip, %function
+lnn_fault_skip:
+    sethi   %hi(g_lnn_fault_skipped), %l3
+    mov     1, %l4
+    st      %l4, [%l3 + %lo(g_lnn_fault_skipped)]
+    jmp     %l2
+    rett    %l2 + 4
 
 /* ---- window underflow (trap 0x06, NWINDOWS=8) ---- */
     .global lnn_window_underflow

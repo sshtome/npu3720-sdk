@@ -22,6 +22,8 @@ Baseline checkpoint: **`v0.1.0`** (`a7fe0f0`) — clean-room firmware builder, `
 | `NNCMX SRAM` | `0x2E000000` (2 × 2 MB tiles, 262 MB/s write) | `[VERIFIED-HW]` | **M2 (`v0.3.0`)** |
 | Dual-core Leon (`LeonNN Core 1`) | `%asr17[31:28]=2`, `0x2F008000`, `LNN ICB 0x2F000000`, `TIM_IPC_FIFO` tag `0xBB000000` | `[VERIFIED-HW]` | **M2 (`v0.3.0`)** |
 | `NNDMA` engine | DDR ↔ CMX descriptors, IRQ, throughput | `[VERIFIED-HW]` | **M3 (`v0.4.0`)** |
+| Hardware SRMMU & L1 Snooping | ASI `0x19` (`ctrl=0x00800000`, CTP r/w OK) on LeonRT/LeonNN, CCR.DS snooping `0x0082400F` | `[VERIFIED-HW]` | **M3 (`v0.4.0`)** |
+| Core Clock & PLL | ~366–384 MHz (~2c/iter @ 209k ticks/1M iter), PUnit WP `0x16` (22) | `[VERIFIED-HW]` | **M3 (`v0.4.0`)** |
 | `4× SHAVE DSP` | `0x2F800000+` (`+0x1000/+0x6000/+0x7000`) | Window `[VERIFIED-CODE]` | **M4 (`v0.5.0`)** |
 | `2× NCE / DPU` compute | `0x2EF30000+`, variant/invariant descriptors | Window `[VERIFIED-CODE]` | **M4 (`v0.5.0`)** |
 | Full JSM & `/dev/accel/accel0` offload | `CREATE_CMD_QUEUE`, `SUBMIT_CMD`, `ENGINE_RESET` | Open | **M5 (`v1.0.0`)** |

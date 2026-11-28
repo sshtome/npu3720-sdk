@@ -9,6 +9,7 @@
 
 static volatile u32 lnn_rx_ipc_count = 0;
 static volatile u32 lnn_last_rx_ipc_word = 0;
+volatile u32 g_lnn_fault_skipped = 0;
 
 struct npu_lnn_mailbox *npu_leonnn_get_mailbox(void)
 {
@@ -33,6 +34,9 @@ int npu_leonnn_start(u32 entry_addr)
     mb->counter = 0;
     mb->status = 0;
     mb->last_rx_ipc = 0;
+    mb->srmmu_ctrl = 0;
+    mb->ccr = 0;
+    mb->fault_flag = 0;
 
     /* 3. Flush L1D and L2C so LeonNN fetches fresh code */
     npu_l1_dcache_flush();
@@ -119,11 +123,39 @@ void npu_lnn_main(void)
 {
     struct npu_lnn_mailbox *mb = (struct npu_lnn_mailbox *)LNN_MBOX_ADDR;
     u32 asr17_val;
+    u32 mmu_val = 0;
+    u32 ccr_val = 0;
 
     __asm__ volatile("rd %%asr17, %0" : "=r"(asr17_val));
 
     mb->asr17 = asr17_val;
     mb->magic = LNN_MAGIC_VAL;
+    mb->fault_flag = 0;
+
+    /* Safe probe of ASI 0x19 (SRMMU CTRL @ 0x000) on LeonNN */
+    g_lnn_fault_skipped = 0;
+    __asm__ volatile("" ::: "memory");
+    __asm__ volatile("lda [%1] 0x19, %0" : "=r"(mmu_val) : "r"(0u) : "memory");
+    __asm__ volatile("" ::: "memory");
+    if (g_lnn_fault_skipped) {
+        mb->srmmu_ctrl = 0xDEADFA09u;
+        mb->fault_flag |= 1u;
+    } else {
+        mb->srmmu_ctrl = mmu_val;
+    }
+
+    /* Safe probe of ASI 0x02 (L1 CCR @ 0x000) on LeonNN */
+    g_lnn_fault_skipped = 0;
+    __asm__ volatile("" ::: "memory");
+    __asm__ volatile("lda [%1] 0x02, %0" : "=r"(ccr_val) : "r"(0u) : "memory");
+    __asm__ volatile("" ::: "memory");
+    if (g_lnn_fault_skipped) {
+        mb->ccr = 0xDEADFA09u;
+        mb->fault_flag |= 2u;
+    } else {
+        mb->ccr = ccr_val;
+    }
+
     mb->status = 1;
 
     /* Main service loop for LeonNN */

@@ -87,6 +87,9 @@ struct npu_lnn_mailbox {
     volatile u32 counter;     /* Incremented by Core 1 */
     volatile u32 status;      /* 1 = booted/ready, 2 = stopping */
     volatile u32 last_rx_ipc; /* Last word received via TIM_IPC_FIFO */
+    volatile u32 srmmu_ctrl;  /* Core 1 ASI 0x19 0x000 (or 0xDEADFA09 on fault) */
+    volatile u32 ccr;         /* Core 1 ASI 0x02 0x000 (L1 CCR) */
+    volatile u32 fault_flag;  /* Bit 0: srmmu faulted, Bit 1: ccr faulted */
 };
 
 extern void npu_lnn_start_entry(void);

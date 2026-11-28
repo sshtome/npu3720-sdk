@@ -467,6 +467,23 @@ static int test_leonnn(void)
 
     npu_leonnn_stop();
 
+    npu_log_puts("probe_lnn: srmmu_ctrl=");
+    if (mb->fault_flag & 1u) {
+        npu_log_puts("FAULT_0x09\n");
+    } else {
+        npu_log_puts("0x");
+        npu_log_hex(mb->srmmu_ctrl);
+        npu_log_puts("\n");
+    }
+    npu_log_puts("probe_lnn: ccr=");
+    if (mb->fault_flag & 2u) {
+        npu_log_puts("FAULT_0x09\n");
+    } else {
+        npu_log_puts("0x");
+        npu_log_hex(mb->ccr);
+        npu_log_puts("\n");
+    }
+
     int ok = ok_boot && (cnt1 > cnt0) && ok_ipc;
     npu_log_puts("test_leonnn: ");
     npu_log_puts(ok ? "PASS" : "FAIL");
@@ -481,6 +498,132 @@ static int test_leonnn(void)
     npu_log_puts("\n");
 
     return ok;
+}
+
+/* ── Safe ASI 0x19 access helpers on LeonRT (protected by trap 0x09) ── */
+extern volatile u32 g_fault_skipped;
+
+static int lrt_safe_lda_asi19(u32 reg_offset, u32 *out)
+{
+    u32 val = 0;
+    g_fault_skipped = 0;
+    __asm__ volatile("" ::: "memory");
+    __asm__ volatile("lda [%1] 0x19, %0" : "=r"(val) : "r"(reg_offset) : "memory");
+    __asm__ volatile("" ::: "memory");
+    if (g_fault_skipped)
+        return -1;
+    if (out)
+        *out = val;
+    return 0;
+}
+
+static int lrt_safe_sta_asi19(u32 reg_offset, u32 val)
+{
+    g_fault_skipped = 0;
+    __asm__ volatile("" ::: "memory");
+    __asm__ volatile("sta %0, [%1] 0x19" :: "r"(val), "r"(reg_offset) : "memory");
+    __asm__ volatile("" ::: "memory");
+    if (g_fault_skipped)
+        return -1;
+    return 0;
+}
+
+static void probe_sysinfo_hardware(void)
+{
+    /* 1. LeonRT SRMMU probe (ASI 0x19: 0x000 CTRL, 0x100 CTP, 0x200 CTX, 0x300 SFSR, 0x400 SFAR) */
+    u32 m_ctrl = 0, m_ctp = 0, m_ctx = 0, m_sfsr = 0, m_sfar = 0;
+    int f_ctrl = lrt_safe_lda_asi19(0x000u, &m_ctrl);
+    int f_ctp  = lrt_safe_lda_asi19(0x100u, &m_ctp);
+    int f_ctx  = lrt_safe_lda_asi19(0x200u, &m_ctx);
+    int f_sfsr = lrt_safe_lda_asi19(0x300u, &m_sfsr);
+    int f_sfar = lrt_safe_lda_asi19(0x400u, &m_sfar);
+
+    (void)f_ctp; (void)f_ctx; (void)f_sfsr; (void)f_sfar;
+
+    if (f_ctrl == 0) {
+        npu_log_puts("probe_srmmu_lrt: PRESENT ctrl=0x");
+        npu_log_hex(m_ctrl);
+        npu_log_puts(" ctp=0x");
+        npu_log_hex(m_ctp);
+        npu_log_puts(" ctx=0x");
+        npu_log_hex(m_ctx);
+        npu_log_puts(" sfsr=0x");
+        npu_log_hex(m_sfsr);
+        npu_log_puts(" sfar=0x");
+        npu_log_hex(m_sfar);
+        npu_log_puts("\n");
+
+        if ((m_ctrl & 1u) == 0u) {
+            /* Test CTP write & readback */
+            u32 orig_ctp = m_ctp;
+            u32 readback_ctp = 0;
+            lrt_safe_sta_asi19(0x100u, 0x12345600u);
+            lrt_safe_lda_asi19(0x100u, &readback_ctp);
+            lrt_safe_sta_asi19(0x100u, orig_ctp); /* Restore! */
+            npu_log_puts("probe_srmmu_lrt: ctp_test wr=0x12345600 rd=0x");
+            npu_log_hex(readback_ctp);
+            npu_log_puts(" restored=0x");
+            npu_log_hex(orig_ctp);
+            npu_log_puts("\n");
+        }
+    } else {
+        npu_log_puts("probe_srmmu_lrt: NOT_PRESENT (trap 0x09 on ASI 0x19)\n");
+    }
+
+    /* 2. L1 D-cache snooping test: check bit 23 (DS) in CCR (ASI 0x02, 0x00) */
+    u32 ccr_orig = npu_l1_ccr_read();
+    npu_l1_ccr_write(ccr_orig | (1u << 23));
+    u32 ccr_set = npu_l1_ccr_read();
+    npu_l1_ccr_write(ccr_orig); /* Restore! */
+    int ds_retained = ((ccr_set & (1u << 23)) != 0);
+    npu_log_puts("probe_l1_snooping: orig=0x");
+    npu_log_hex(ccr_orig);
+    npu_log_puts(" set=0x");
+    npu_log_hex(ccr_set);
+    npu_log_puts(" ds_bit23=");
+    npu_log_puts(ds_retained ? "RETAINED(snooping_hw_present)" : "ZERO(snooping_not_synthesized)");
+    npu_log_puts("\n");
+
+    /* 3. Core frequency and boot_params */
+    const struct npu_boot_params *bp = (const struct npu_boot_params *)NPU_BOOT_PARAMS_ADDR;
+    npu_log_puts("probe_freq: bp_freq=");
+    npu_log_dec(bp->frequency);
+    npu_log_puts(" perf_clk=");
+    npu_log_dec(bp->perf_clk_frequency);
+    npu_log_puts(" min_pll=");
+    npu_log_dec(bp->min_freq_pll_ratio);
+    npu_log_puts(" max_pll=");
+    npu_log_dec(bp->max_freq_pll_ratio);
+    npu_log_puts(" pn_pll=");
+    npu_log_dec(bp->pn_freq_pll_ratio);
+    npu_log_puts("\n");
+
+    /* Fixed 1,000,000 loop iteration: subcc + bne + nop */
+    u32 count = 1000000u;
+    u32 t0 = npu_ticks();
+    __asm__ volatile(
+        "1: subcc %0, 1, %0\n\t"
+        "   bne   1b\n\t"
+        "   nop\n\t"
+        : "+r"(count)
+        :
+        : "cc", "memory"
+    );
+    u32 t1 = npu_ticks();
+    u32 loop_ticks = t1 - t0;
+    u32 time_us = (loop_ticks * 10u) / 384u;
+    u32 mhz_2c = (loop_ticks > 0u) ? (76800000u / loop_ticks) : 0u;
+    u32 mhz_3c = (loop_ticks > 0u) ? (115200000u / loop_ticks) : 0u;
+
+    npu_log_puts("probe_freq: 1M_loop ticks=");
+    npu_log_dec(loop_ticks);
+    npu_log_puts(" (");
+    npu_log_dec(time_us);
+    npu_log_puts(" us) => est_mhz(2c)=");
+    npu_log_dec(mhz_2c);
+    npu_log_puts(" (3c)=");
+    npu_log_dec(mhz_3c);
+    npu_log_puts("\n");
 }
 
 void kmain(void)
@@ -508,6 +651,8 @@ void kmain(void)
     npu_dma_init();
     pass_cnt += (u32)test_dma_cmx();
     pass_cnt += (u32)test_dma_ddr();
+
+    probe_sysinfo_hardware();
 
     if (pass_cnt == total) {
         npu_log_puts("SELFTEST: PASS (9/9)\n");
